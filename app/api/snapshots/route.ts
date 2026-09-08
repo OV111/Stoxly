@@ -4,6 +4,7 @@ import { getCurrentUser } from "@/lib/getCurrentUser";
 import PortfolioSnapshot from "@/models/PortfolioSnapshot";
 
 const DEFAULT_DAYS = 90;
+const MAX_DAYS = 365; // Prevent excessive query
 
 export async function GET(request: Request) {
   try {
@@ -12,9 +13,16 @@ export async function GET(request: Request) {
       return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
     }
 
-    const daysParam = new URL(request.url).searchParams.get("days");
-    const parsed = Number(daysParam);
-    const days = Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : DEFAULT_DAYS;
+    const url = new URL(request.url);
+    const daysParam = url.searchParams.get("days");
+    let days = DEFAULT_DAYS;
+
+    if (daysParam) {
+      const parsed = Number(daysParam);
+      if (Number.isFinite(parsed) && parsed > 0) {
+        days = Math.min(Math.floor(parsed), MAX_DAYS);
+      }
+    }
 
     await connectDB();
 
@@ -27,9 +35,57 @@ export async function GET(request: Request) {
       .sort({ snapshotDate: 1 })
       .lean();
 
-    // Empty array is the expected case for a user with no snapshots yet —
-    // never a 404, so the client can render an "no history yet" state.
-    return NextResponse.json(snapshots, { status: 200 });
+    // Early return if no data
+    if (snapshots.length === 0) {
+      return NextResponse.json(
+        {
+          snapshots: [],
+          totalDeposits: 0,
+          totalWithdrawals: 0,
+          startValue: 0,
+          endValue: 0,
+        },
+        {
+          status: 200,
+          headers: {
+            "Cache-Control": "public, s-maxage=60, stale-while-revalidate=300",
+          },
+        },
+      );
+    }
+
+    // Transform to component shape
+    const transformed = snapshots.map((s: any) => ({
+      date: s.snapshotDate.toISOString().split("T")[0], // YYYY-MM-DD
+      value: s.totalValue ?? 0,
+      deposits: s.netDeposits && s.netDeposits > 0 ? s.netDeposits : 0,
+      withdrawals:
+        s.netDeposits && s.netDeposits < 0 ? Math.abs(s.netDeposits) : 0,
+    }));
+
+    // Compute aggregates
+    const totalDeposits = transformed.reduce((sum, d) => sum + d.deposits, 0);
+    const totalWithdrawals = transformed.reduce(
+      (sum, d) => sum + d.withdrawals,
+      0,
+    );
+    const startValue = transformed[0].value;
+    const endValue = transformed[transformed.length - 1].value;
+
+    const response = {
+      snapshots: transformed,
+      totalDeposits,
+      totalWithdrawals,
+      startValue,
+      endValue,
+    };
+
+    return NextResponse.json(response, {
+      status: 200,
+      headers: {
+        "Cache-Control": "public, s-maxage=60, stale-while-revalidate=300",
+      },
+    });
   } catch (err) {
     console.error("[snapshots:GET]", err);
     return NextResponse.json({ message: "Server error" }, { status: 500 });

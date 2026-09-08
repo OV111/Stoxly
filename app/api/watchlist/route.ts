@@ -3,6 +3,9 @@ import { connectDB } from "@/lib/mongoose";
 import { getCurrentUser } from "@/lib/getCurrentUser";
 import Watchlist from "@/models/Watchlist";
 import { fetchQuotes } from "@/lib/finnhub";
+import { fetchCryptoQuotes } from "@/lib/coingecko";
+
+const isCryptoSymbol = (symbol: string) => symbol.startsWith("CRYPTO:");
 
 export async function GET() {
   try {
@@ -17,11 +20,48 @@ export async function GET() {
     const symbols = watchlist?.symbols ?? [];
 
     if (symbols.length === 0) {
-      return NextResponse.json([], { status: 200 });
+      return NextResponse.json({ items: [], total: 0 }, { status: 200 });
     }
 
-    const quotes = await fetchQuotes(symbols);
-    return NextResponse.json(quotes, { status: 200 });
+    // Separate stocks and crypto
+    const stockSymbols = symbols.filter((s) => !isCryptoSymbol(s));
+    const cryptoSymbols = symbols.filter((s) => isCryptoSymbol(s));
+
+    // Fetch quotes for both
+    const [stockQuotes, cryptoQuotes] = await Promise.all([
+      stockSymbols.length > 0 ? fetchQuotes(stockSymbols) : [],
+      cryptoSymbols.length > 0 ? fetchCryptoQuotes(cryptoSymbols) : [],
+    ]);
+
+    // Format stocks
+    const stockItems = stockQuotes.map((q) => ({
+      id: q.symbol,
+      symbol: q.symbol,
+      name: q.symbol, // You might want to fetch names from a separate endpoint
+      type: "stock" as const,
+      price: q.price,
+      change: q.change,
+      changePercent: q.changePercent,
+      volume: null,
+      image: null,
+    }));
+
+    // Format crypto
+    const cryptoItems = cryptoQuotes.map((q) => ({
+      id: q.symbol,
+      symbol: q.symbol.replace("CRYPTO:", ""),
+      name: q.symbol.replace("CRYPTO:", "").toUpperCase(),
+      type: "crypto" as const,
+      price: q.price,
+      change: q.change,
+      changePercent: q.changePercent,
+      volume: null,
+      image: q.image,
+    }));
+
+    const items = [...stockItems, ...cryptoItems];
+
+    return NextResponse.json({ items, total: items.length }, { status: 200 });
   } catch (err) {
     console.error("[watchlist:GET]", err);
     return NextResponse.json({ message: "Server error" }, { status: 500 });
