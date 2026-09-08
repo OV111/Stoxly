@@ -1,5 +1,6 @@
 "use client";
-
+// import {CometSpinner} from "@/components/loading-ui/comet-spinner";
+import {Classic} from "@/components/loading-ui/classic";
 import { useEffect, useState } from "react";
 import { BarChart3, RefreshCw, WalletCards, X, Loader2, ChevronDown, ChevronUp } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -225,8 +226,8 @@ const CryptoPage = () => {
   // ============================================================
   if (initialLoading)
     return (
-      <div className="flex min-h-[50vh] items-center justify-center">
-        <p className="text-lg text-gray-500">Loading crypto assets...</p>
+      <div className="flex justify-center items-center min-h-[50vh]">
+        <Classic className="size-10"/>
       </div>
     );
 
