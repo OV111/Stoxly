@@ -10,6 +10,8 @@ import TryDemoButton from "@/components/ui/TryDemoButton";
 import { navbarItems } from "@/lib/constants";
 import type { CurrentUser } from "@/lib/getCurrentUser";
 
+import { Search } from "lucide-react";
+
 const LandingNav = ({ user }: { user: CurrentUser | null }) => {
   const [hovered, setHovered] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -69,6 +71,9 @@ const LandingNav = ({ user }: { user: CurrentUser | null }) => {
                 </li>
               ))}
             </ul>
+            <Link href="/search" className="flex items-center gap-2">
+              <Search className="h-4 w-4" />
+            </Link>
             <UserMenu name={user.name} email={user.email} />
           </>
         ) : (
@@ -128,9 +133,17 @@ const LandingNav = ({ user }: { user: CurrentUser | null }) => {
               </ul>
             ) : (
               <div className="flex flex-col gap-2">
-                <TryDemoButton size="lg" fullWidth onNavigate={() => setMenuOpen(false)} />
+                <TryDemoButton
+                  size="lg"
+                  fullWidth
+                  onNavigate={() => setMenuOpen(false)}
+                />
                 <Link href="/sign-in" onClick={() => setMenuOpen(false)}>
-                  <Button variant="ghost" size="lg" className="w-full cursor-pointer">
+                  <Button
+                    variant="ghost"
+                    size="lg"
+                    className="w-full cursor-pointer"
+                  >
                     Sign In
                   </Button>
                 </Link>
