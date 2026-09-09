@@ -1,15 +1,35 @@
-import { NextResponse } from "next/server";
-import { searchSymbols } from "@/lib/finnhub";
+// app/api/search/route.ts
+import { NextRequest, NextResponse } from "next/server";
+import { requireAuth } from "@/lib/auth";
+import { unifiedSearch } from "@/lib/search";
 
-export async function GET(request: Request): Promise<NextResponse> {
+export async function GET(req: NextRequest) {
+  const user = await requireAuth();
+  if (!user) {
+    return NextResponse.json(
+      { error: "Unauthorized – please log in" },
+      { status: 401 },
+    );
+  }
+
+  const { searchParams } = new URL(req.url);
+  const q = searchParams.get("q");
+
+  if (!q || q.trim().length < 2) {
+    return NextResponse.json(
+      { error: "Query must be at least 2 characters" },
+      { status: 400 },
+    );
+  }
+
   try {
-    const query = new URL(request.url).searchParams.get("q")?.trim() ?? "";
-    if (!query) return NextResponse.json([]);
-
-    const results = await searchSymbols(query);
-    return NextResponse.json(results);
-  } catch (err) {
-    console.error("[search:GET]", err);
-    return NextResponse.json({ error: "Failed to fetch" }, { status: 500 });
+    const results = await unifiedSearch(q.trim());
+    return NextResponse.json(results, { status: 200 });
+  } catch (error) {
+    console.error("[API] /api/search error:", error);
+    return NextResponse.json(
+      { error: "Internal server error" },
+      { status: 500 },
+    );
   }
 }
