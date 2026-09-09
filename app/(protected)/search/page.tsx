@@ -1,114 +1,136 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import Link from "next/link";
-import { Search } from "lucide-react";
+import { useState, useEffect, useCallback } from "react";
+import { SearchInput } from "@/components/search/SearchInput";
+import { SearchResultsList } from "@/components/search/SearchResultsList";
+import { Instrument } from "@/types/search";
+import { toast } from "sonner"; //
 
-type SymbolSearchResult = {
-  symbol: string;
-  displaySymbol: string;
-  description: string;
-  type: string;
-};
-
-const SearchPage = () => {
+export default function SearchPage() {
+  const [results, setResults] = useState<Instrument[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
   const [query, setQuery] = useState("");
-  const [results, setResults] = useState<SymbolSearchResult[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(false);
-  // the query the current `results` actually belong to — so the empty state
-  // says "No results for X" using the searched term, not what's being typed
-  const [searchedQuery, setSearchedQuery] = useState("");
+  const [watchlistSymbols, setWatchlistSymbols] = useState<Set<string>>(
+    new Set(),
+  );
 
+  // Fetch current watchlist
+  const fetchWatchlist = useCallback(async () => {
+    try {
+      const res = await fetch("/api/watchlist");
+      if (res.ok) {
+        const data = await res.json();
+        const symbols = new Set<string>();
+        data.forEach((item: any) => {
+          symbols.add(`${item.type}:${item.symbol}`);
+        });
+        setWatchlistSymbols(symbols);
+      }
+    } catch (error) {
+      console.error("[SearchPage] Failed to fetch watchlist:", error);
+    }
+  }, []);
+
+  // Load watchlist on mount
   useEffect(() => {
-    const trimmed = query.trim();
+    fetchWatchlist();
+  }, [fetchWatchlist]);
 
-    if (!trimmed) {
+  // Perform search
+  const handleSearch = useCallback(async (q: string) => {
+    const trimmed = q.trim();
+    setQuery(trimmed);
+
+    if (trimmed.length < 2) {
       setResults([]);
-      setSearchedQuery("");
-      setLoading(false);
-      setError(false);
       return;
     }
 
-    setLoading(true);
-    setError(false);
+    setIsLoading(true);
+    try {
+      const res = await fetch(`/api/search?q=${encodeURIComponent(trimmed)}`);
+      if (!res.ok) {
+        throw new Error(`Search failed: ${res.status}`);
+      }
+      const data = await res.json();
+      setResults(data);
+    } catch (error) {
+      console.error("[SearchPage] Search error:", error);
+      toast.error("Search failed", {
+        description: "Unable to fetch results. Please try again.",
+      });
+      setResults([]);
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
 
-    // debounce: each keystroke re-runs the effect, and the cleanup cancels the
-    // pending timer, so only a 300ms pause actually fires a request.
-    const timer = setTimeout(() => {
-      fetch(`/api/search?q=${encodeURIComponent(trimmed)}`)
-        .then((r) => r.json())
-        .then((data) => {
-          if (Array.isArray(data)) setResults(data);
-          else setError(true);
-          setSearchedQuery(trimmed);
-        })
-        .catch(() => setError(true))
-        .finally(() => setLoading(false));
-    }, 300);
+  // Add to watchlist
+  const handleAdd = useCallback(async (instrument: Instrument) => {
+    try {
+      const res = await fetch("/api/watchlist", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          symbol: instrument.symbol,
+          type: instrument.type,
+        }),
+      });
 
-    return () => clearTimeout(timer);
-  }, [query]);
+      if (!res.ok) {
+        throw new Error(`Failed to add: ${res.status}`);
+      }
+
+      // Update local watchlist set
+      setWatchlistSymbols((prev) => {
+        const next = new Set(prev);
+        next.add(`${instrument.type}:${instrument.symbol}`);
+        return next;
+      });
+
+      toast.success("Added to watchlist", {
+        description: `${instrument.symbol} (${instrument.name}) added successfully.`,
+      });
+    } catch (error) {
+      console.error("[SearchPage] Add failed:", error);
+      toast.error("Failed to add", {
+        description: "Unable to add to watchlist. Please try again.",
+      });
+    }
+  }, []);
+
+  const getIsAdded = useCallback(
+    (symbol: string, type: string) => {
+      return watchlistSymbols.has(`${type}:${symbol}`);
+    },
+    [watchlistSymbols],
+  );
 
   return (
-    <div className="space-y-8 px-8">
-      <div>
-        <h1 className="text-2xl md:text-3xl font-bold text-gray-100">Search</h1>
-        <p className="text-gray-500 mt-1 text-sm">
-          Find a stock by symbol or company name
+    <div className="container max-w-3xl mx-auto py-8 px-4 space-y-6">
+      {/* Header */}
+      <div className="space-y-2">
+        <h1 className="text-3xl font-bold tracking-tight">Search</h1>
+        <p className="text-muted-foreground">
+          Find stocks, ETFs, and cryptocurrencies to add to your watchlist
         </p>
       </div>
 
-      <div className="relative max-w-sm">
-        <Search className="w-4 h-4 text-gray-500 absolute left-3 top-1/2 -translate-y-1/2" />
-        <input
-          type="text"
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          placeholder="Search symbols (e.g. AAPL, Tesla)"
-          className="w-full bg-gray-800 border border-gray-700 rounded-lg pl-9 pr-3 py-2 text-sm text-gray-100 placeholder-gray-500 focus:outline-none focus:border-gray-500"
-        />
-      </div>
+      {/* Search Input */}
+      <SearchInput
+        onSearch={handleSearch}
+        isLoading={isLoading}
+        placeholder="Search for stocks, ETFs, or crypto..."
+      />
 
-      {!query.trim() ? (
-        <p className="text-gray-500 text-sm">
-          Start typing to search for a stock.
-        </p>
-      ) : loading ? (
-        <p className="text-gray-500 text-sm">Searching...</p>
-      ) : error ? (
-        <p className="text-red-500 text-sm">Search failed. Try again.</p>
-      ) : results.length === 0 ? (
-        <p className="text-gray-500 text-sm">
-          No results for &quot;{searchedQuery}&quot;
-        </p>
-      ) : (
-        <ul className="space-y-2">
-          {results.map((result) => (
-            <li key={`${result.symbol}-${result.displaySymbol}`}>
-              <Link
-                href={`/stock/${result.symbol}`}
-                className="flex items-center justify-between gap-4 bg-gray-800 border border-gray-600 rounded-xl px-5 py-4 hover:border-gray-500 transition-colors"
-              >
-                <div className="flex items-center gap-3 min-w-0">
-                  <span className="text-xs font-mono font-semibold px-2 py-1 rounded bg-gray-700 text-yellow-400 shrink-0">
-                    {result.displaySymbol || result.symbol}
-                  </span>
-                  <span className="text-sm text-gray-100 truncate">
-                    {result.description}
-                  </span>
-                </div>
-                <span className="text-xs text-gray-500 font-mono shrink-0">
-                  {result.type}
-                </span>
-              </Link>
-            </li>
-          ))}
-        </ul>
-      )}
+      {/* Results */}
+      <SearchResultsList
+        results={results}
+        isLoading={isLoading}
+        query={query}
+        onAdd={handleAdd}
+        getIsAdded={getIsAdded}
+      />
     </div>
   );
-};
-
-export default SearchPage;
+}
