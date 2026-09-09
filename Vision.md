@@ -33,6 +33,11 @@ _Last updated: 2026-08-23. Update this section whenever a build-sequence step la
 
 **Done — seeded demo account:** one-click, no signup wall. `lib/demoSeed.ts` (deterministic ~2-year, 15-holding transaction set, includes an NVDA 4:1 split, a partial AAPL sell for realized P&L, a TSLA loss, and recurring dividends) + `lib/demoAccount.ts` (idempotent find-or-create + seed-once-if-empty) + `POST /api/auth/demo` (issues a real session cookie, same path as sign-in) + `TryDemoButton` wired into the landing nav (desktop/mobile) and the sign-in page. **Not yet verified against a live DB** — run it and confirm `/dashboard` renders real TWR/MWR/holdings before trusting it.
 
+- Crypto markets use CoinGecko's bulk market endpoint (not Finnhub), and each asset card can log directly to the append-only ledger using a canonical `CRYPTO:<coin-id>` symbol. The portfolio quote layer recognizes those symbols and values them through CoinGecko, rather than treating crypto as a separate tracker. Requires `COINGECKO_API_KEY` in `.env.local`.
+- Crypto Markets supports selecting multiple assets for a grounded live-quote comparison (price, daily move, and session range). It deliberately does not forecast or recommend trades; portfolio-level risk analytics remains tied to the ledger and historical bars.
+- The dashboard&apos;s static movers panel is replaced by live CoinGecko crypto gainers and losers, ranked by 24-hour percentage change within the top 100 assets by market cap. The bounded universe is stated in the UI rather than implying a market-wide ranking.
+- Crypto asset cards and the dashboard movers render the CoinGecko-supplied asset logos; image hosts are explicitly allowlisted in `next.config.ts`.
+
 **Not started / remaining:**
 - **AI debrief layer** (see "The Idea" below) — deliberately last, per Build Sequence. Blocked: no `ANTHROPIC_API_KEY` in `.env.local` yet.
 - **Cron wiring** — `/api/pricebars/sync`, `/api/snapshots/sync`, and `/api/alerts/evaluate` are all manual-trigger routes. None run on a schedule yet; they need a `vercel.json` crons entry. Until then `PortfolioSnapshot` stays empty and the history chart shows its empty state.
@@ -180,10 +185,28 @@ This is the feature that makes Stoxly a product, not a portfolio piece that happ
 
 ---
 
+## No Buy/Sell Signals — A Hard Architectural Boundary
+
+Stoxly deliberately has no feature for recommending what to buy, sell, or when — for stocks, crypto, or any other asset. This is not a gap in the roadmap. It is a closed design decision.
+
+**Why it's off the table:**
+
+- **Legal exposure.** Emitting a "buy BTC now" or "sell AAPL" signal, even framed as AI output, crosses into financial advice territory in most jurisdictions. The liability is real and disproportionate to any product benefit.
+- **It would corrupt the AI grounding rule.** The hard constraint — the model may only emit numbers it received from a tool call — has no meaningful enforcement path for forward-looking predictions. A price forecast is by definition not sourced from the portfolio's own data. Allowing it would make the grounding architecture a lie.
+- **Predictions are probably wrong.** A "should I buy X" feature that's right 52% of the time and wrong 48% destroys user trust faster than not having it. Stoxly's moat is being *correct* — backward-looking analysis where correctness is verifiable. Forward-looking predictions aren't verifiable until it's too late.
+- **It's a different product.** Buy/sell signal generation belongs to quantitative trading tools, not portfolio analytics platforms. Adding it here is scope explosion that muddies the identity of the project.
+
+**What the AI layer does instead:** it explains what already happened, using the platform's own verified math. "Your BTC position contributed −4.2% to your total return last week, and its 90-day correlation with your NASDAQ holdings is now 0.82" — that is a grounded, useful, legally safe statement. "Buy more BTC" is none of those things.
+
+**Enforced in the eval suite:** correct refusal on "should I buy X," "what should I invest in," and "is now a good time to buy [symbol]" is a required passing case. Any model output that answers those questions affirmatively — even hedged — is a test failure.
+
+---
+
 ## What It Is Not
 
 - Not a brokerage — no trade execution
 - Not a financial advisor — nothing here is investment advice, and the AI layer is explicitly constrained never to sound like one
+- Not a buy/sell signal generator — no recommendations on what or when to buy or sell, for any asset class
 - Not a paper-trading/matching-engine simulator — sounds impressive, is scope explosion, and drags toward order books, a different project entirely
 - Not a social network — no feeds, no followers, no sentiment from strangers
 
@@ -252,3 +275,20 @@ A reviewer gives this project about three minutes. Two things decide the outcome
 ---
 
 _Built by Vahe Ohanyan. © 2026 Stoxly._
+
+### Search — Financial Instrument Discovery
+
+Search is Stoxly's financial-instrument discovery layer. It resolves a user's search intent into a canonical, identifiable instrument that the rest of the platform can operate on.
+
+The initial supported universe is:
+
+* **Stocks / Equities** — AAPL, NVDA, TSLA
+* **Cryptoassets** — BTC, ETH, SOL
+* **ETFs** — SPY, QQQ, VOO
+* **Indices / Benchmarks** — S&P 500, NASDAQ-100
+
+Stocks, ETFs, and cryptoassets can become portfolio holdings, while indices primarily serve as reference instruments for benchmarking and risk analytics.
+
+Mutual funds, bonds, commodities, FX, and other instruments may be added later. **Derivatives (options/futures) are currently out of scope** because they require substantially different financial and portfolio semantics.
+
+Search is responsible for **finding and identifying instruments**, not analyzing, recommending, or forecasting them. The result should provide a canonical Stoxly identifier and instrument type so the same identity can flow consistently through the asset page, watchlist, transaction ledger, quotes, analytics, and AI debrief.
