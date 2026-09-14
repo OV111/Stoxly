@@ -9,6 +9,7 @@ export interface Instrument {
   exchange?: string;    // e.g., "NASDAQ", "NYSE"
   market?: string;      // e.g., "US", "Global"
   currency?: string;    // e.g., "USD"
+  marketCap?:number;
   // optional internal id – can be constructed from symbol+type
   id?: string;
 }
