@@ -1,7 +1,7 @@
 "use client";
 
 import { Instrument } from "@/types/search";
-import { InstrumentCard } from "./InstrumentCard";
+import { InstrumentCard } from "./NewsCard";
 import { cn } from "@/lib/utils";
 
 interface SearchResultsListProps {

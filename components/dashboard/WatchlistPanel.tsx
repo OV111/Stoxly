@@ -1,245 +1,100 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
-import Panel from "@/components/dashboard/Panel";
-import { RefreshCw, Plus, X } from "lucide-react";
+import { useRouter } from "next/navigation";
+import Link from "next/link";
+import { TrendingUp, ArrowRight } from "lucide-react";
+import { SparklineChart } from "@/components/watchlist/SparklineChart";
+import { WatchlistSkeletonRows } from "@/components/watchlist/WatchlistEmptyState";
+import { useWatchlist } from "@/hooks/useWatchlist";
 
-type WatchlistItem = {
-  id: string;
-  symbol: string;
-  name: string;
-  type: "stock" | "crypto";
-  price: number | null;
-  change: number | null;
-  changePercent: number | null;
-  volume: number | null;
-  image?: string;
-};
+function fmtPrice(n: number) {
+  if (n < 1) return `$${n.toFixed(4)}`;
+  return `$${n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
 
-type WatchlistData = {
-  items: WatchlistItem[];
-};
-
-const formatCurrency = (value: number) =>
-  `$${value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-
-const WatchlistPanel = () => {
-  const [watchlist, setWatchlist] = useState<WatchlistData | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [refreshing, setRefreshing] = useState(false);
-  const [newSymbol, setNewSymbol] = useState("");
-  const [adding, setAdding] = useState(false);
-
-  const fetchWatchlist = useCallback(async (showRefreshing = false) => {
-    if (showRefreshing) setRefreshing(true);
-    else setLoading(true);
-    setError(null);
-
-    // Replace your try block in fetchWatchlist:
-    try {
-      const response = await fetch("/api/watchlist");
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.message || "Failed to fetch watchlist");
-      }
-
-      // Normalize: ensure items is always an array
-      setWatchlist({
-        items: Array.isArray(data.items) ? data.items : [],
-      });
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load watchlist");
-      setWatchlist(null);
-    }
-  }, []);
-
-  useEffect(() => {
-    fetchWatchlist();
-  }, [fetchWatchlist]);
-
-  const addSymbol = async () => {
-    if (!newSymbol.trim()) return;
-
-    setAdding(true);
-    try {
-      const response = await fetch("/api/watchlist", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ symbol: newSymbol.toUpperCase().trim() }),
-      });
-
-      if (!response.ok) {
-        throw new Error("Failed to add symbol");
-      }
-
-      setNewSymbol("");
-      await fetchWatchlist();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to add symbol");
-    } finally {
-      setAdding(false);
-    }
-  };
-
-  const removeSymbol = async (symbol: string) => {
-    try {
-      const response = await fetch(`/api/watchlist?symbol=${symbol}`, {
-        method: "DELETE",
-      });
-
-      if (!response.ok) {
-        throw new Error("Failed to remove symbol");
-      }
-
-      await fetchWatchlist();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to remove symbol");
-    }
-  };
-
-  if (loading) {
-    return (
-      <Panel title="WATCHLIST" slot="@watchlist">
-        <div className="animate-pulse space-y-3">
-          {[1, 2, 3, 4].map((i) => (
-            <div
-              key={i}
-              className="flex items-center gap-3 p-2 rounded bg-gray-800/30"
-            >
-              <div className="w-10 h-10 rounded-full bg-gray-800/60" />
-              <div className="flex-1 space-y-2">
-                <div className="h-3 bg-gray-800/60 rounded w-1/4" />
-                <div className="h-3 bg-gray-800/60 rounded w-1/3" />
-              </div>
-              <div className="h-6 bg-gray-800/60 rounded w-16" />
-            </div>
-          ))}
-        </div>
-      </Panel>
-    );
-  }
-
-  if (error) {
-    return (
-      <Panel title="WATCHLIST" slot="@watchlist">
-        <div className="flex flex-col items-center justify-center py-8 gap-3">
-          <p className="text-red-500 text-sm">{error}</p>
-          <button
-            onClick={() => fetchWatchlist()}
-            className="text-xs text-blue-400 hover:text-blue-300 transition-colors flex items-center gap-1.5"
-          >
-            <RefreshCw className="w-3.5 h-3.5" />
-            Retry
-          </button>
-        </div>
-      </Panel>
-    );
-  }
-
-  const hasItems = watchlist && watchlist.items.length > 0;
+export function WatchlistPanel() {
+  const router  = useRouter();
+  const { items, loading } = useWatchlist();
+  const preview = items.slice(0, 5);
 
   return (
-    <Panel
-      title="WATCHLIST"
-      slot="@watchlist"
-      action={
-        <button
-          onClick={() => fetchWatchlist(true)}
-          disabled={refreshing}
-          className="text-gray-500 hover:text-gray-300 transition-colors disabled:opacity-50"
+    <div className="rounded-xl border border-zinc-800/80 bg-zinc-900/50 overflow-hidden">
+      {/* header */}
+      <div className="flex items-center justify-between px-4 py-3 border-b border-zinc-800/60">
+        <div className="flex items-center gap-2">
+          <TrendingUp className="h-3.5 w-3.5 text-teal-400" strokeWidth={1.75} />
+          <span className="text-sm font-medium text-zinc-200">Watchlist</span>
+          {!loading && (
+            <span className="text-[10px] text-zinc-600">{items.length}/50</span>
+          )}
+        </div>
+        <Link
+          href="/watchlist"
+          className="flex items-center gap-1 text-[11px] text-zinc-500 hover:text-teal-400 transition-colors"
         >
-          <RefreshCw
-            className={`w-4 h-4 ${refreshing ? "animate-spin" : ""}`}
-          />
-        </button>
-      }
-    >
-      {/* Add symbol input */}
-      <div className="flex items-center gap-2 mb-3">
-        <input
-          type="text"
-          value={newSymbol}
-          onChange={(e) => setNewSymbol(e.target.value)}
-          onKeyDown={(e) => e.key === "Enter" && addSymbol()}
-          placeholder="Add symbol (e.g., AAPL)"
-          className="flex-1 px-3 py-1.5 text-sm bg-gray-800/60 border border-gray-700 rounded-lg text-gray-200 placeholder-gray-500 focus:outline-none focus:border-blue-500 transition-colors"
-          disabled={adding}
-        />
-        <button
-          onClick={addSymbol}
-          disabled={adding || !newSymbol.trim()}
-          className="px-3 py-1.5 bg-blue-500/20 hover:bg-blue-500/30 text-blue-400 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          <Plus className="w-4 h-4" />
-        </button>
+          View all <ArrowRight className="h-3 w-3" />
+        </Link>
       </div>
 
-      {hasItems ? (
-        <div className="space-y-2">
-          {watchlist.items.map((item) => (
-            <div
-              key={item.id}
-              className="flex items-center gap-3 p-2 rounded-lg hover:bg-gray-800/30 transition-colors"
-            >
-              <div className="w-8 h-8 rounded-full bg-gray-800 flex items-center justify-center text-xs font-semibold text-gray-400 overflow-hidden">
-                {item.image ? (
-                  <img
-                    src={item.image}
-                    alt={item.symbol}
-                    className="w-full h-full object-cover"
-                  />
+      {/* rows */}
+      {loading ? (
+        <WatchlistSkeletonRows count={4} />
+      ) : preview.length === 0 ? (
+        <div className="px-4 py-6 text-center">
+          <p className="text-xs text-zinc-600">Nothing tracked yet.</p>
+          <Link href="/watchlist" className="mt-1 inline-block text-xs text-teal-400 hover:underline">
+            Add symbols
+          </Link>
+        </div>
+      ) : (
+        <div className="divide-y divide-zinc-800/40">
+          {preview.map((item) => {
+            const { symbol, name, price, changePercent, logo, sparkline } = item;
+            const isUp        = (changePercent ?? 0) >= 0;
+            const changeColor = isUp ? "text-teal-400" : "text-red-500";
+
+            return (
+              <button
+                key={symbol}
+                onClick={() => router.push(`/markets/${symbol.toLowerCase()}`)}
+                className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-zinc-800/40 transition-colors"
+              >
+                {/* logo */}
+                {logo ? (
+                  <img src={logo} alt={symbol} className="h-6 w-6 rounded-full object-cover bg-zinc-800 shrink-0" />
                 ) : (
-                  item.symbol.slice(0, 2)
+                  <div className="h-6 w-6 rounded-full bg-zinc-800 flex items-center justify-center shrink-0">
+                    <span className="text-[8px] font-bold text-zinc-500">{symbol.slice(0, 2)}</span>
+                  </div>
                 )}
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2">
-                  <span className="text-sm font-semibold text-gray-200">
-                    {item.symbol}
-                  </span>
-                  <span className="text-xs text-gray-500 truncate">
-                    {item.name}
-                  </span>
+
+                {/* symbol + name */}
+                <div className="flex flex-col gap-0.5 flex-1 text-left min-w-0">
+                  <span className="text-xs font-semibold text-zinc-100">{symbol}</span>
+                  <span className="text-[10px] text-zinc-600 truncate">{name}</span>
                 </div>
-                <div className="flex items-center gap-2">
-                  <span className="text-xs text-gray-400">
-                    {item.price !== null ? formatCurrency(item.price) : "—"}
+
+                {/* sparkline */}
+                {sparkline && sparkline.length >= 2 && (
+                  <SparklineChart data={sparkline} width={56} height={24} />
+                )}
+
+                {/* price + change */}
+                <div className="flex flex-col items-end gap-0.5 shrink-0">
+                  <span className="text-xs font-semibold text-zinc-100 tabular-nums">
+                    {price !== null ? fmtPrice(price) : "—"}
                   </span>
-                  {item.changePercent !== null && (
-                    <span
-                      className={`text-xs font-mono ${
-                        item.changePercent >= 0
-                          ? "text-teal-400"
-                          : "text-red-500"
-                      }`}
-                    >
-                      {item.changePercent >= 0 ? "+" : ""}
-                      {item.changePercent.toFixed(2)}%
+                  {changePercent !== null && (
+                    <span className={`text-[10px] font-medium tabular-nums ${changeColor}`}>
+                      {isUp ? "+" : ""}{changePercent.toFixed(2)}%
                     </span>
                   )}
                 </div>
-              </div>
-              <button
-                onClick={() => removeSymbol(item.symbol)}
-                className="p-1 text-gray-500 hover:text-red-400 transition-colors"
-              >
-                <X className="w-4 h-4" />
               </button>
-            </div>
-          ))}
-        </div>
-      ) : (
-        <div className="text-center py-8">
-          <p className="text-sm text-gray-500">No watchlist items yet.</p>
-          <p className="text-xs text-gray-600 mt-1">
-            Search and add symbols above.
-          </p>
+            );
+          })}
         </div>
       )}
-    </Panel>
+    </div>
   );
-};
-
-export default WatchlistPanel;
+}
