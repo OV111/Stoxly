@@ -12,6 +12,11 @@ export type Quote = {
   high: number;
   low: number;
   previousClose: number;
+  volume?: number | null;
+  marketCap?: number | null;
+  sparkline?: number[];
+  high52?: number | null;
+  low52?: number | null;
 };
 
 export type CryptoMover = {
@@ -36,6 +41,9 @@ type CoinGeckoMarket = {
   low_24h: number | null;
   market_cap?: number;
   total_volume?: number;
+  sparkline_in_7d?: {
+    price: number[];
+  };
 };
 
 const BASE_URL = "https://api.coingecko.com/api/v3";
@@ -97,6 +105,7 @@ export async function fetchCryptoQuotes(symbols: string[]): Promise<Quote[]> {
         ids: ids.join(","),
         price_change_percentage: "24h",
         precision: "full",
+        sparkline: "true",
       });
       const response = await fetch(`${BASE_URL}/coins/markets?${params}`, {
         next: { revalidate: TTL.QUOTE },
@@ -118,17 +127,35 @@ export async function fetchCryptoQuotes(symbols: string[]): Promise<Quote[]> {
           market.current_price <= 0
         )
           return [];
+
+        const sparklinePrices = market.sparkline_in_7d?.price;
+        const sparkline =
+          Array.isArray(sparklinePrices) && sparklinePrices.length > 0
+            ? sparklinePrices
+            : undefined;
+
+        const current = market.current_price;
+        const rawLow = sparkline && sparkline.length > 0 ? Math.min(...sparkline) : (market.low_24h ?? current);
+        const rawHigh = sparkline && sparkline.length > 0 ? Math.max(...sparkline) : (market.high_24h ?? current);
+        const low52 = Math.min(rawLow, current);
+        const high52 = Math.max(rawHigh, current);
+
         return [
           {
             symbol,
             image: market.image,
-            price: market.current_price,
+            price: current,
             change: market.price_change_24h ?? 0,
             changePercent: market.price_change_percentage_24h ?? 0,
             open: 0,
-            high: market.high_24h ?? market.current_price,
-            low: market.low_24h ?? market.current_price,
+            high: market.high_24h ?? current,
+            low: market.low_24h ?? current,
             previousClose: 0,
+            volume: market.total_volume ?? null,
+            marketCap: market.market_cap ?? null,
+            sparkline,
+            high52,
+            low52,
           },
         ];
       });

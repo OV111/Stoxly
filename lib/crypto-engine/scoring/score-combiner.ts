@@ -41,7 +41,7 @@ export class ScoreCombiner {
     };
   }
 
-  private scoreToRecommendation(score: number): {
+  public scoreToRecommendation(score: number): {
     overall: RecommendationType;
     rationale: string;
   } {

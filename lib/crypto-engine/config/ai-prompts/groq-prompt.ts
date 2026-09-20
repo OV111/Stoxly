@@ -1,5 +1,4 @@
-// config/ai-prompts/groq-prompt.ts
-import { DeepSeekInput } from '../../types';
+import { AnalyticalAIInput } from '../../types/ai';
 
 export function buildGroqSystemPrompt(): string {
   return `
@@ -49,10 +48,7 @@ Do not output anything else. Only the JSON.
 `;
 }
 
-export function buildGroqUserPrompt(input: DeepSeekInput): string {
-  // NOTE: We reuse the DeepSeekInput structure for Groq as well, since they analyze the same data.
-  // But we tailor the prompt text slightly for Llama 3's preference for clear bullet points.
-
+export function buildGroqUserPrompt(input: AnalyticalAIInput): string {
   return `
 ANALYZE THIS CRYPTO ASSET DATA (${input.asset.symbol}):
 
@@ -79,7 +75,6 @@ Consensus: ${input.fundamental_data.consensusMechanism}
 Active Devs (30d): ${input.fundamental_data.developerActivity.activeDevs30d} (Trend: ${input.fundamental_data.developerActivity.trend})
 Commits (30d): ${input.fundamental_data.developerActivity.commits30d}
 Active Addresses: ${input.fundamental_data.ecosystem.activeAddresses30d?.toLocaleString() || 'N/A'}
-TVL: $${(input.fundamental_data.ecosystem.tvl || 0).toLocaleString()}
 
 --- TOKENOMICS ---
 Circulating: ${(input.tokenomics.circulatingSupply / 1e6).toFixed(2)}M
@@ -100,8 +95,6 @@ Network Health: ${(input.onchain_data.networkHealth * 100).toFixed(0)}%
 Overall Sentiment: ${(input.news_summary.overallSentiment * 100).toFixed(0)}%
 Positive/Negative/Neutral: ${input.news_summary.positiveCount}/${input.news_summary.negativeCount}/${input.news_summary.neutralCount}
 Top Topics: ${input.news_summary.topTopics.join(', ')}
-Recent Catalysts: ${input.news_summary.recentCatalysts.join('; ')}
-Recent Risks: ${input.news_summary.recentRisks.join('; ')}
 
 --- MACRO CONTEXT ---
 BTC Trend: ${input.macro_context.btcTrend}

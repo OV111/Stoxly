@@ -38,7 +38,7 @@ export function singleflight<T>(key: string, fn: () => Promise<T>): Promise<T> {
 
 /** Seconds. Tuned to how fast each kind of data actually changes. */
 export const TTL = {
-  QUOTE: 45, // "live" enough without being tick-level
+  QUOTE: 10, // "live" enough without being tick-level
   NEWS: 900, // 15 min — headlines don't churn faster
   PROFILE: 86_400, // 24h — company metadata barely moves
   SEARCH: 3_600, // 1h — the symbol universe is near-static

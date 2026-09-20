@@ -2,7 +2,7 @@ import { Instrument } from "@/types/search";
 import { searchStocks } from "./stock-search";
 import { searchCrypto } from "./coingecko";
 import { getCached, setCache } from "@/lib/cache";
-// index from Instrument isn't called 
+// index from Instrument isn't called
 export async function unifiedSearch(query: string): Promise<Instrument[]> {
   const q = query.trim();
 
@@ -16,23 +16,23 @@ export async function unifiedSearch(query: string): Promise<Instrument[]> {
     return cached;
   }
 
-  const [stocksResult, cryptosResult] = await Promise.allSettled([
-    searchStocks(q),
+  const [cryptosResult, stocksResult] = await Promise.allSettled([
     searchCrypto(q),
+    searchStocks(q),
   ]);
 
   let results: Instrument[] = [];
-
-  if (stocksResult.status === "fulfilled") {
-    results.push(...stocksResult.value);
-  } else {
-    console.error("[search] Stocks provider failed:", stocksResult.reason);
-  }
 
   if (cryptosResult.status === "fulfilled") {
     results.push(...cryptosResult.value);
   } else {
     console.error("[search] Crypto provider failed:", cryptosResult.reason);
+  }
+
+  if (stocksResult.status === "fulfilled") {
+    results.push(...stocksResult.value);
+  } else {
+    console.error("[search] Stocks provider failed:", stocksResult.reason);
   }
 
   if (results.length === 0) return [];
@@ -46,11 +46,12 @@ export async function unifiedSearch(query: string): Promise<Instrument[]> {
   });
 
   results.sort((a, b) => {
-    const aExact = a.symbol.toLowerCase() === q.toLowerCase();
-    const bExact = b.symbol.toLowerCase() === q.toLowerCase();
+    const ql = q.toLowerCase();
+    const aExact = a.symbol.toLowerCase() === ql;
+    const bExact = b.symbol.toLowerCase() === ql;
     if (aExact && !bExact) return -1;
     if (!aExact && bExact) return 1;
-    return 0;
+    return (b.marketCap ?? 0) - (a.marketCap ?? 0); // highest cap first
   });
 
   await setCache(cacheKey, results, 3600);
