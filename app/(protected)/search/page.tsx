@@ -1,8 +1,8 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { SearchInput } from "@/components/search/SearchInput";
-import { SearchResultsList } from "@/components/search/SearchResultsList";
+import { SearchInput } from "@/components/search/NewsList";
+import { SearchResultsList } from "@/components/search/NewsFilters";
 import { Instrument } from "@/types/search";
 import { toast } from "sonner"; //
 
