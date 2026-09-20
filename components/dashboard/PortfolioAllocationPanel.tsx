@@ -66,7 +66,7 @@ const PortfolioAllocationPanel = () => {
 
   if (loading) {
     return (
-      <section className="flex flex-col rounded-lg border border-zinc-800 bg-zinc-950/80">
+      <section className="flex flex-col rounded-lg border border-gray-800 bg-black">
         <header className="flex items-center justify-between gap-4 border-b border-zinc-800 px-5 py-3.5">
           <div className="flex items-baseline gap-3">
             <h2 className="text-[0.7rem] font-semibold uppercase tracking-[0.14em] text-zinc-300">
@@ -97,7 +97,7 @@ const PortfolioAllocationPanel = () => {
 
   if (error) {
     return (
-      <section className="flex flex-col rounded-lg border border-zinc-800 bg-zinc-950/80">
+      <section className="flex flex-col rounded-lg border border-gray-800 bg-black">
         <header className="flex items-center justify-between border-b border-zinc-800 px-5 py-3.5">
           <div className="flex items-baseline gap-3">
             <h2 className="text-[0.7rem] font-semibold uppercase tracking-[0.14em] text-zinc-300">
@@ -136,7 +136,7 @@ const PortfolioAllocationPanel = () => {
 
   if (allocation.length === 0) {
     return (
-      <section className="flex flex-col rounded-lg border border-zinc-800 bg-zinc-950/80">
+      <section className="flex flex-col rounded-lg border border-gray-800 bg-black">
         <header className="flex items-center justify-between border-b border-zinc-800 px-5 py-3.5">
           <div className="flex items-baseline gap-3">
             <h2 className="text-[0.7rem] font-semibold uppercase tracking-[0.14em] text-zinc-300">
@@ -173,7 +173,7 @@ const PortfolioAllocationPanel = () => {
   }
 
   return (
-    <section className="flex flex-col rounded-lg border border-zinc-800 bg-zinc-950/80">
+    <section className="flex flex-col rounded-lg border border-gray-800 bg-gray-900">
       {/* Header */}
       <header className="flex items-center justify-between gap-4 border-b border-zinc-800 px-5 py-3.5">
         <div className="flex min-w-0 items-baseline gap-3">
@@ -221,7 +221,7 @@ const PortfolioAllocationPanel = () => {
 
         {/* Stacked allocation bar */}
         <div
-          className="mb-6 flex h-3 w-full overflow-hidden rounded-full bg-zinc-900"
+          className="mb-6 flex h-3 w-full overflow-hidden rounded-full bg-gray-900"
           aria-label="Portfolio allocation"
         >
           {allocation.map((item, index) => {

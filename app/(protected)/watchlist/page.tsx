@@ -77,7 +77,7 @@ export default function WatchlistPage() {
           </div>
         )}
 
-        <div className="rounded-xl border border-zinc-800/80 bg-zinc-900/50 overflow-hidden">
+        <div className="rounded-xl border bg-gray-900  border-gray-800 overflow-hidden">
           <WatchlistTable
             items={items}
             loading={loading}

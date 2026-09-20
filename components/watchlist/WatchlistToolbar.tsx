@@ -40,7 +40,7 @@ export function WatchlistToolbar({
   ];
 
   return (
-    <div className="flex items-center justify-between gap-3 px-4 py-2.5 border-b border-zinc-800/80">
+    <div className="flex items-center justify-between gap-3 px-4 py-2.5 border-b bg-gray-800 border-gray-800">
       {/* filter pills */}
       <div className="flex items-center gap-1">
         {filters.map((f) => (

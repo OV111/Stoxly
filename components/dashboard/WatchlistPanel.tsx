@@ -18,14 +18,18 @@ export function WatchlistPanel() {
   const preview = items.slice(0, 5);
 
   return (
-    <div className="rounded-xl border border-zinc-800/80 bg-zinc-900/50 overflow-hidden">
+    <div className="rounded-xl border border-gray-800 bg-gray-900 overflow-hidden">
       {/* header */}
-      <div className="flex items-center justify-between px-4 py-3 border-b border-zinc-800/60">
-        <div className="flex items-center gap-2">
-          <TrendingUp className="h-3.5 w-3.5 text-teal-400" strokeWidth={1.75} />
-          <span className="text-sm font-medium text-zinc-200">Watchlist</span>
+      <div className="flex items-center justify-between px-4 py-3.5 border-b border-zinc-800/60">
+        <div className="flex items-center gap-2 py-1">
+          <h2 className="text-[0.7rem] font-semibold uppercase tracking-[0.14em] text-blue-400">
+            Watchlist
+          </h2>
+
           {!loading && (
-            <span className="text-[10px] text-zinc-600">{items.length}/50</span>
+            <span className="text-[10px] font-mono text-gray-500 bg-gray-800/80 border border-gray-700 rounded px-1.5 py-0.5">
+              {items.length}/50
+            </span>
           )}
         </div>
         <Link

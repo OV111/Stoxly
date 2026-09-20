@@ -87,7 +87,7 @@ export function WatchlistTable({
       />
 
       {/* column headers — desktop only */}
-      <div className="hidden lg:flex items-center gap-3 px-4 py-2 border-b border-zinc-800/40">
+      <div className="hidden lg:flex items-center gap-3 px-4 py-2.5 border-b border-zinc-800/40">
         <span className="text-[10px] text-zinc-600 w-[150px] shrink-0">Symbol</span>
         <span className="text-[10px] text-zinc-600 w-[105px] shrink-0 text-right">Price / Change</span>
         <span className="text-[10px] text-zinc-600 w-20 shrink-0 hidden sm:block">7d</span>

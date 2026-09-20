@@ -114,7 +114,7 @@ export default function BillingPage() {
 
   return (
     <div
-      className="min-h-screen bg-[#0a0f0d] text-white"
+      className="min-h-screen  text-white"
       style={{ fontFamily: "Inter, system-ui, sans-serif" }}
     >
       {/* Header */}

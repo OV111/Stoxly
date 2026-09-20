@@ -68,12 +68,14 @@ export function WatchlistRow({ item, onRemove, onAddToPortfolio }: WatchlistRowP
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
       onClick={() => router.push(`/markets/${symbol.toLowerCase()}`)}
+      // Note for AI: the border top and bottom can be fixed for first and last items!
       className={`
         relative flex items-center gap-3 px-4 py-3.5 cursor-pointer
-        border-b border-zinc-800/60 transition-colors duration-100
+        border-t border-zinc-800/60 transition-colors duration-100
         ${hovered ? "bg-zinc-800/40" : "bg-transparent"}
       `}
     >
+
       {/* 1. Logo + symbol + name */}
       <div className="flex items-center gap-2.5 w-[150px] shrink-0">
         {logo ? (

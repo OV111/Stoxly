@@ -23,7 +23,7 @@ export default async function Home() {
           dotSpacing={20}
           bulgeStrength={120}
           glowRadius={200}
-          gradientFrom="rgba(59, 130, 246, 0.4)"
+          gradientFrom="rgba(59, 130, 246, 0.3)"
           gradientTo="rgba(59, 130, 246, 0.18)"
           glowColor="#050505"
         />
