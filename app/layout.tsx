@@ -8,7 +8,7 @@ const montserrat = Montserrat({
 });
 
 export const metadata: Metadata = {
-  title: "Stock Market",
+  title: "Stoxly",
   description:
     "Track and analyze stock market data with our powerful tools and insights.",
 };

@@ -6,9 +6,10 @@
 
 ## Current Status
 
-_Last updated: 2026-08-23. Update this section whenever a build-sequence step lands._
+_Last updated: 2026-09-13. Update this section whenever a build-sequence step lands._
 
 **Done:**
+
 - Landing page (nav, hero, responsive across breakpoints)
 - Auth: sign-in/up, Google OAuth, password reset (`models/User.ts`, `app/api/auth/*`)
 - `models/Transactions.ts` — the append-only ledger, `Decimal128` throughout, 5 currencies (USD/AMD/EUR/CNY/GBP)
@@ -26,6 +27,10 @@ _Last updated: 2026-08-23. Update this section whenever a build-sequence step la
 - `models/PriceBar.ts` (Mongo time-series) + `lib/priceBarSync.ts` + `/api/pricebars/sync`
 - `models/PortfolioSnapshot.ts` + `lib/portfolioSnapshotSync.ts` + `/api/snapshots/sync` — idempotent daily cache, unique on `{userId, snapshotDate}`
 - **Test suite**: Vitest, 22 tests over `holdings-engine` and `return-engine` (`npm test`). Covers FIFO lot consumption, split cost-basis preservation, out-of-order replay, XIRR known-answer + root verification + degenerate inputs. Caught and fixed a real float-dust bug where a fully-sold fractional position stayed visible as an open holding — the engines now close lots on a `QUANTITY_EPSILON` rather than `=== 0`.
+- Crypto markets use CoinGecko's bulk market endpoint (not Finnhub), and each asset card can log directly to the append-only ledger using a canonical `CRYPTO:<coin-id>` symbol. The portfolio quote layer recognizes those symbols and values them through CoinGecko, rather than treating crypto as a separate tracker. Requires `COINGECKO_API_KEY` in `.env.local`.
+- Crypto Markets supports selecting multiple assets for a grounded live-quote comparison (price, daily move, and session range). It deliberately does not forecast or recommend trades; portfolio-level risk analytics remains tied to the ledger and historical bars.
+- The dashboard's static movers panel is replaced by live CoinGecko crypto gainers and losers, ranked by 24-hour percentage change within the top 100 assets by market cap. The bounded universe is stated in the UI rather than implying a market-wide ranking.
+- Crypto asset cards and the dashboard movers render the CoinGecko-supplied asset logos; image hosts are explicitly allowlisted in `next.config.ts`.
 
 **Known gap, not yet closed:** TWR currently approximates each sub-period's value using cumulative net cash invested (deposits − withdrawals) as a stand-in for actual market value at each flow date, because there's no historical price snapshot to pull the real value from. This will under/overstate TWR whenever price movement between deposits is significant. Fixing it needs `PortfolioSnapshot` rows to accumulate (the model and sync route now exist — the daily cron that populates them does not) or the OHLC time-series collection backfilled, so past portfolio value is knowable rather than approximated.
 
@@ -33,36 +38,66 @@ _Last updated: 2026-08-23. Update this section whenever a build-sequence step la
 
 **Done — seeded demo account:** one-click, no signup wall. `lib/demoSeed.ts` (deterministic ~2-year, 15-holding transaction set, includes an NVDA 4:1 split, a partial AAPL sell for realized P&L, a TSLA loss, and recurring dividends) + `lib/demoAccount.ts` (idempotent find-or-create + seed-once-if-empty) + `POST /api/auth/demo` (issues a real session cookie, same path as sign-in) + `TryDemoButton` wired into the landing nav (desktop/mobile) and the sign-in page. **Not yet verified against a live DB** — run it and confirm `/dashboard` renders real TWR/MWR/holdings before trusting it.
 
-- Crypto markets use CoinGecko's bulk market endpoint (not Finnhub), and each asset card can log directly to the append-only ledger using a canonical `CRYPTO:<coin-id>` symbol. The portfolio quote layer recognizes those symbols and values them through CoinGecko, rather than treating crypto as a separate tracker. Requires `COINGECKO_API_KEY` in `.env.local`.
-- Crypto Markets supports selecting multiple assets for a grounded live-quote comparison (price, daily move, and session range). It deliberately does not forecast or recommend trades; portfolio-level risk analytics remains tied to the ledger and historical bars.
-- The dashboard&apos;s static movers panel is replaced by live CoinGecko crypto gainers and losers, ranked by 24-hour percentage change within the top 100 assets by market cap. The bounded universe is stated in the UI rather than implying a market-wide ranking.
-- Crypto asset cards and the dashboard movers render the CoinGecko-supplied asset logos; image hosts are explicitly allowlisted in `next.config.ts`.
-
 **Not started / remaining:**
-- **AI debrief layer** (see "The Idea" below) — deliberately last, per Build Sequence. Blocked: no `ANTHROPIC_API_KEY` in `.env.local` yet.
+
+- **AI debrief layer** (see "The AI Debrief" section below) — deliberately last, per Build Sequence. Blocked: no `ANTHROPIC_API_KEY` in `.env.local` yet.
+- **Billing page** — UI shell for pricing/subscription tiers (`/billing`). Logic to be added later; page scaffolded now so the monetization surface exists. See "Monetization" section below.
+- **CSV import** — the immediate onboarding friction fix. Preserves ledger architecture, just changes the ingestion mechanism. See "Onboarding" section below.
 - **Cron wiring** — `/api/pricebars/sync`, `/api/snapshots/sync`, and `/api/alerts/evaluate` are all manual-trigger routes. None run on a schedule yet; they need a `vercel.json` crons entry. Until then `PortfolioSnapshot` stays empty and the history chart shows its empty state.
 - `risk-engine.ts` is untested — it queries `PriceBar` directly, so unit testing needs either dependency injection of the price-bar fetch or `mongodb-memory-server`. Refactoring it to accept price series as an argument (like the other two engines) is the change to make first.
 - `app/api/market/chart/route.ts` — still a stub.
-- Data input is manual-entry only by design (see "Data Input" note below) — no brokerage account linking.
+- Data input is manual-entry only currently — CSV import is the next ingestion step (no brokerage account linking yet).
 - `PortfolioHistoryPanel` reuses `components/stock/PriceChart.tsx` by padding snapshot values into unused OHLC fields. Works, but the clean fix is an optional `values: number[]` prop on `PriceChart` that skips the candle mapping.
 
-**Next recommended step:** verify Finnhub candle access (see Blocking unknown above) — it gates whether `risk-engine.ts` can ever return real numbers, and the answer determines whether the next task is "wire the cron" or "swap OHLC providers." After that, the seeded demo account is the highest-leverage remaining work per this doc's own argument.
+**Next recommended steps (in order):**
+
+1. Wire cron jobs (`vercel.json` crons for pricebars/sync, snapshots/sync, alerts/evaluate)
+2. Verify demo account against a live DB — confirm `/dashboard` renders real TWR/MWR/holdings
+3. Scaffold billing page `/billing` (UI shell only, no payment logic yet)
+4. CSV import for transaction ingestion
+5. AI debrief layer (once `ANTHROPIC_API_KEY` is in `.env.local`)
 
 ---
 
-## The Reframe
+## Strategic Positioning
 
-"Stock market dashboard" is one of the most saturated portfolio project categories that exists — up there with e-commerce clones and todo apps. A reviewer's first reaction to the repo name is pattern recognition, not curiosity: _another ticker app_. Every UI feature added inside that frame fights an uphill battle for attention it will not win.
+### The Reframe
 
-So the question isn't "which features are impressive." It's: **what can be built here that a developer without a finance background literally cannot build correctly?**
+"Stock market dashboard" is one of the most saturated portfolio project categories that exists. A reviewer's first reaction to the repo name is pattern recognition, not curiosity: _another ticker app_.
 
-That's the moat, and it's a real one: Finance BSc + FinTech Master's + full-stack engineering. Almost nobody in the applicant pool has that combination. The project's job is to make that unmistakable — built by someone who understands markets, not someone who found the Finnhub docs. Every decision below is filtered through that lens.
+The strongest positioning is not:
+
+> "A better portfolio tracker."
+
+It's:
+
+> **"A portfolio intelligence engine that explains what actually happened to your investments using mathematically correct data."**
+
+That distinction is everything. Brokers show you what you own. Stoxly explains how your portfolio actually performed, what caused it, and how your risk has changed. That's the product.
+
+### The Domain Moat
+
+**Finance BSc + FinTech Master's + full-stack engineering.** Almost nobody in the applicant pool has that combination. The project's job is to make that unmistakable — built by someone who understands markets, not someone who found the Finnhub docs.
+
+The moat is not the UI. It's the ledger, the return math, and the risk analytics underneath — the part that can't be faked by copying a tutorial.
+
+### The Business Moat (Long-Term)
+
+Technical differentiation is not yet a defensible business moat. Another company could build "AI portfolio analysis" with enough resources. The moat becomes real when it's:
+
+> **"A trusted financial data system that produces longitudinal intelligence about your portfolio that gets more valuable the longer you use it."**
+
+Stoxly knows your portfolio composition over 2 years, your deposits, withdrawals, realized P&L, risk evolution, concentration changes, correlations, behavioral patterns, and performance attribution. That history is the moat. The AI can tell you:
+
+> "Your portfolio has become progressively more concentrated over the last 9 months."
+
+That's not replicable in one click. It compounds with time.
 
 ---
 
 ## What It Is
 
-Stoxly is a personal portfolio analytics platform for tracking stocks and crypto with correct financial math underneath — not a brokerage, not a social platform, not a trading simulator. The UI is the thin, fast, dark-themed layer on top. The actual product is the ledger, the return math, and the risk analytics underneath it, because that's the part that can't be faked by copying a tutorial.
+Stoxly is a personal portfolio analytics platform for tracking stocks and crypto with correct financial math underneath — not a brokerage, not a social platform, not a trading simulator. The UI is the thin, fast, dark-themed layer on top. The actual product is the ledger, the return math, and the risk analytics underneath it, because that's the part that can't be faked or skimmed off a component library.
 
 ---
 
@@ -102,8 +137,6 @@ FIFO / LIFO / specific-lot-ID cost basis, realized vs. unrealized P&L split. Bor
 
 Beta against a benchmark, rolling volatility, max drawdown, Sharpe ratio, and a correlation matrix across holdings — "you think you're diversified; these five names are 0.9 correlated." This is rare because it's actual _insight_, not a restatement of data the user already has.
 
-None of this is UI work. That's why it's the moat — it can't be faked or skimmed off a component library.
-
 ---
 
 ## Data Model — The Decision That Can't Be Retrofitted
@@ -134,81 +167,146 @@ interface Transaction {
 
 Three decisions embedded here that matter more than any feature:
 
-1. **Money is never a JS `Number`.** `0.1 + 0.2 !== 0.3`, and IEEE-754 floats silently corrupt cost basis over hundreds of transactions. Use Mongo `Decimal128` (correct, awkward in JS — pair with `decimal.js` at the boundary) or integer minor units. Either is defensible; `Number` is not. This is the single strongest "this person has done real fintech work" signal in the codebase, and the first thing a reviewer with finance/banking experience checks.
-2. **Positions are derived, never stored.** Holdings = a fold over the transaction log. Same event-sourcing instinct real ledger systems use — it's what makes corrections and backdated entries tractable instead of destructive.
+1. **Money is never a JS `Number`.** `0.1 + 0.2 !== 0.3`, and IEEE-754 floats silently corrupt cost basis over hundreds of transactions. Use Mongo `Decimal128` (correct, awkward in JS — pair with `decimal.js` at the boundary).
+2. **Positions are derived, never stored.** Holdings = a fold over the transaction log. Same event-sourcing instinct real ledger systems use.
 3. **`occurredAt` vs `createdAt` — bitemporality.** Backdating a trade forgotten last week must not corrupt everything computed since.
 
-**OHLC price history is a separate concern** and does not belong in a normal collection — Mongo's native time-series collections (`timeseries: { timeField, metaField, granularity }`) are the idiomatic answer while staying on Mongo. Mixing high-cardinality tick data into app collections is a mistake reviewers notice immediately.
+**OHLC price history** is a separate concern and does not belong in a normal collection — Mongo's native time-series collections are the idiomatic answer.
 
 ---
 
 ## Systems Problems Worth Solving
 
-Async/infra work that most portfolio projects have zero of — having any is differentiating; handling the edge cases is a talking point.
-
-- **Request coalescing / singleflight over Finnhub** — 50 concurrent requests for AAPL collapse to 1 upstream call, plus a circuit breaker. The API's real rate ceiling is a gift: a genuine constraint forcing a genuine solution.
-- **Exactly-once alert delivery** — a distributed-systems problem in miniature: idempotency keys, a fired-state transition that survives worker retries, dedupe so a price oscillating around a threshold doesn't fire 40 emails.
+- **Request coalescing / singleflight over Finnhub** — 50 concurrent requests for AAPL collapse to 1 upstream call, plus a circuit breaker.
+- **Exactly-once alert delivery** — idempotency keys, a fired-state transition that survives worker retries, dedupe so a price oscillating around a threshold doesn't fire 40 emails.
 - **Backfill/reconciliation job** — providers revise history after the fact; a job that detects drift between stored bars and source data is unglamorous and extremely "real system."
 
 ---
 
-## AI Layer — Done Non-Cliché
+## The AI Debrief — The Product Centerpiece
 
-Streaming summaries are table stakes in 2026. What isn't:
+The AI debrief is not a late feature bolted on. It's what everything else has been building toward. Once a week (or on demand), Stoxly generates a **personal portfolio debrief** — not a market summary, not a news feed, but a structured audit of _your_ portfolio using _your_ actual transaction data and risk metrics.
 
-- **Hard grounding rule** — the model may never emit a number it didn't receive from a tool call (`getPortfolio`, `getQuote`, `getRiskMetrics`). Enforced via tool use plus post-generation validation: every numeral in the output must appear in the tool results, or it's rejected and retried.
-- **An eval suite** — 20–30 fixture cases asserting no hallucinated figures, correct refusal on "should I buy X," stable output structure. This is what AI engineering actually looks like now, versus "I called the API" — and almost nobody has it in a portfolio.
-- **Explanation, not prediction.** Grounded attribution from the platform's own math, never market forecasting. Financial-advice framing is a liability, not a feature.
+### What a debrief card looks like
 
----
+```
+Your Week in Stoxly
 
-## The Idea — AI-Powered Portfolio Debrief
+Portfolio: +2.8%
 
-Once a week (or on demand), Stoxly generates a **personal portfolio debrief** — not a market summary, not a news feed, but a structured audit of *your* portfolio using *your* actual transaction data and risk metrics.
+Main driver: NVDA contributed 71% of weekly gains.
+Risk: concentration increased from 28% → 34%.
+Diversification: AAPL/NVDA correlation remains high at 0.82.
+Investor effect: Your MWR exceeded TWR — timing of your recent deposit worked in your favor (+2.1%).
+Conclusion: Most gains came from one position, not broad portfolio improvement.
+```
 
 It answers three questions a generic dashboard never does:
 
-- **What actually drove your returns this week?** — not "markets were up," but "87% of your gain came from NVDA, which now makes up 34% of your portfolio — your concentration risk increased."
-- **Where is your portfolio lying to you?** — assets that feel diversified but are 0.9 correlated, a position sized as a small bet that's quietly become your largest holding.
-- **What does the math say you did well or poorly?** — TWR vs MWR delta explained in plain language: "you timed your AAPL deposit well, it added 2.1% to your money-weighted return above the strategy return."
+- **What actually drove your returns?** — not "markets were up," but attribution to specific positions.
+- **Where is your portfolio lying to you?** — assets that feel diversified but are 0.9 correlated, a position that quietly became your largest holding.
+- **What does the math say you did well or poorly?** — TWR vs MWR delta in plain language.
 
-**Why this is the right idea for Stoxly specifically:**
+### Why it's only possible here
 
-- It's only possible because the ledger and risk analytics are correct underneath — a fake tracker can't generate this, which is the whole point of the moat
-- The AI layer stays grounded — every sentence traces to a tool call result, no hallucinated numbers, which is exactly the architecture this doc already mandates
-- It's a feature a real user actually wants, not a demo gimmick
-- It fits the build sequence — it's last, after the math is solid, which is where it belongs
+The debrief is only credible because the ledger and risk analytics are correct underneath. A fake tracker can't generate this. That's the whole point of the moat.
 
-**What it is not:** a market prediction, a "buy/sell" recommendation, or a sentiment scraper. Entirely backward-looking, entirely grounded in the user's own data.
+### Hard grounding rule
 
-This is the feature that makes Stoxly a product, not a portfolio piece that happens to have a dashboard.
+The model may **never** emit a number it didn't receive from a tool call (`getPortfolio`, `getQuote`, `getRiskMetrics`). Enforced via tool use plus post-generation validation: every numeral in the output must appear in the tool results, or it's rejected and retried.
+
+### Eval suite
+
+20–30 fixture cases asserting no hallucinated figures, correct refusal on "should I buy X," stable output structure. This is what AI engineering actually looks like now.
 
 ---
 
 ## No Buy/Sell Signals — A Hard Architectural Boundary
 
-Stoxly deliberately has no feature for recommending what to buy, sell, or when — for stocks, crypto, or any other asset. This is not a gap in the roadmap. It is a closed design decision.
+Stoxly deliberately has no feature for recommending what to buy, sell, or when. This is a **closed design decision**, not a gap.
 
-**Why it's off the table:**
+**Why:**
 
-- **Legal exposure.** Emitting a "buy BTC now" or "sell AAPL" signal, even framed as AI output, crosses into financial advice territory in most jurisdictions. The liability is real and disproportionate to any product benefit.
-- **It would corrupt the AI grounding rule.** The hard constraint — the model may only emit numbers it received from a tool call — has no meaningful enforcement path for forward-looking predictions. A price forecast is by definition not sourced from the portfolio's own data. Allowing it would make the grounding architecture a lie.
-- **Predictions are probably wrong.** A "should I buy X" feature that's right 52% of the time and wrong 48% destroys user trust faster than not having it. Stoxly's moat is being *correct* — backward-looking analysis where correctness is verifiable. Forward-looking predictions aren't verifiable until it's too late.
-- **It's a different product.** Buy/sell signal generation belongs to quantitative trading tools, not portfolio analytics platforms. Adding it here is scope explosion that muddies the identity of the project.
+- **Legal exposure.** Buy/sell signals cross into financial advice territory in most jurisdictions.
+- **Corrupts the grounding rule.** A price forecast is by definition not sourced from the portfolio's own data.
+- **Predictions are probably wrong.** Stoxly's moat is being correct on backward-looking analysis where correctness is verifiable.
+- **Wrong product identity.** Buy/sell signal generation belongs to quantitative trading tools.
 
-**What the AI layer does instead:** it explains what already happened, using the platform's own verified math. "Your BTC position contributed −4.2% to your total return last week, and its 90-day correlation with your NASDAQ holdings is now 0.82" — that is a grounded, useful, legally safe statement. "Buy more BTC" is none of those things.
-
-**Enforced in the eval suite:** correct refusal on "should I buy X," "what should I invest in," and "is now a good time to buy [symbol]" is a required passing case. Any model output that answers those questions affirmatively — even hedged — is a test failure.
+**Enforced in the eval suite:** correct refusal on "should I buy X," "what should I invest in," and "is now a good time to buy [symbol]" is a required passing case.
 
 ---
 
-## What It Is Not
+## Onboarding — Removing Friction
 
-- Not a brokerage — no trade execution
-- Not a financial advisor — nothing here is investment advice, and the AI layer is explicitly constrained never to sound like one
-- Not a buy/sell signal generator — no recommendations on what or when to buy or sell, for any asset class
-- Not a paper-trading/matching-engine simulator — sounds impressive, is scope explosion, and drags toward order books, a different project entirely
-- Not a social network — no feeds, no followers, no sentiment from strangers
+Manual transaction entry is the current ingestion method and is architecturally correct. But from a product perspective, "enter your 87 transactions manually" kills consumer adoption.
+
+**Ingestion roadmap:**
+
+| Phase | Method                  | Status   |
+| ----- | ----------------------- | -------- |
+| 1     | Manual entry (modal)    | ✅ Done  |
+| 2     | CSV import              | 🔲 Next  |
+| 3     | Broker API integrations | 🔲 Later |
+
+CSV import is the immediate priority. It preserves the ledger architecture — the append-only log remains the source of truth, CSV is just a different ingestion path. Each row maps to a `Transaction` document via the same schema. No mutable positions, no shortcuts.
+
+---
+
+## Monetization
+
+**Billing page:** `/billing` — UI shell to be scaffolded now. Payment logic (Stripe or equivalent) to be wired later. The page exists so the monetization surface is present when the project is reviewed or demoed.
+
+### Tier structure (planned)
+
+**Free**
+
+- Portfolio tracking
+- Basic holdings + returns
+- Watchlist
+- Basic risk metrics
+
+**Pro — ~$8–15/month**
+
+- Weekly AI portfolio debrief
+- Advanced performance attribution (TWR vs MWR delta explained)
+- Concentration + correlation analysis
+- Historical risk evolution
+- Custom benchmarks
+- Larger transaction history
+- Price alerts
+
+**B2B / Professional (later)**
+
+- Financial educators, independent advisors, finance communities
+- Not the current focus — prove individual user demand first
+
+### What to monetize
+
+Not basic tracking. The intelligence layer. Free tracking → paid intelligence is the right split because tracking is a commodity; grounded, longitudinal portfolio attribution is not.
+
+---
+
+## Scope Boundaries
+
+### In scope
+
+- Stocks, ETFs, crypto, indices/benchmarks
+- Portfolio analytics + AI debrief
+- Price alerts
+- News (Finnhub-sourced, factual, per-symbol)
+- Search + instrument discovery
+- Billing / subscription tier UI
+
+### Out of scope — permanently closed decisions
+
+- **Trading signals / buy/sell recommendations** — legal exposure + corrupts grounding architecture
+- **Social features** (feeds, followers, sentiment from strangers) — different product
+- **Paper trading / matching engine / order books** — scope explosion, different project
+- **Brokerage execution** — not a brokerage
+- **Crypto exchange** — not a trading platform
+- **AI chatbot** — the debrief is not a chat interface; it's a structured, grounded report
+
+These are not gaps in the roadmap. They are closed design decisions that protect product identity.
 
 ---
 
@@ -218,42 +316,43 @@ Stoxly deliberately has no feature for recommending what to buy, sell, or when �
 | --------- | ------------------------------------------------------------ |
 | Framework | Next.js 16 (App Router, Turbopack)                           |
 | UI        | Tailwind CSS 4, shadcn/ui, Framer Motion                     |
-| Data      | Finnhub API, TradingView widgets                             |
+| Data      | Finnhub API, TwelveData (OHLC fallback), CoinGecko (crypto)  |
 | Numbers   | `decimal.js` at the JS boundary, Mongo `Decimal128` at rest  |
 | AI        | Claude API — tool use + grounding validation, streaming      |
 | Auth      | JWT sessions (`jose`), bcrypt, Google OAuth                  |
 | Database  | MongoDB (Mongoose) + native time-series collections for OHLC |
+| Payments  | Stripe (planned, not yet wired)                              |
 
 ---
 
-## Build Sequence — And the Trap
-
-Current known gaps: no Watchlist/Portfolio/Alert models, `app/api/market/chart/route.ts` is an empty stub, no test suite. **Do not add surface area on top of that.** Six new pages over an untested, float-based core makes the repo worse, not better — more code, same rot. A reviewer reads that as breadth without depth, which reads as junior.
+## Build Sequence
 
 Order, in priority:
 
-1. **Transaction schema + pure calculation module** — cost basis, realized/unrealized P&L, TWR, XIRR. Pure functions, trivially unit-tested, and the foundation everything else stands on.
-2. **Portfolio surface** on top of the ledger — holdings derived, not stored.
-3. **Caching/coalescing layer** over Finnhub — makes "live" sustainable instead of aspirational.
-4. **Alerts + worker** — exactly-once delivery, idempotent, dedupe.
-5. **Risk analytics** — beta, volatility, drawdown, Sharpe, correlation matrix.
-6. **AI layer, last** — it's only interesting once there's real, correct data underneath it to be grounded in.
-
-The trap: building the AI layer or the alerts UI first because they demo well. They demo well and then fall over the first time someone checks the math, which is worse than not having them.
+1. ✅ **Transaction schema + pure calculation module** — cost basis, TWR, XIRR. Pure functions, unit-tested.
+2. ✅ **Portfolio surface** — holdings derived, not stored.
+3. ✅ **Caching/coalescing layer** over Finnhub.
+4. ✅ **Alerts + worker** — exactly-once delivery, idempotent, dedupe.
+5. ✅ **Risk analytics** — beta, volatility, drawdown, Sharpe, correlation matrix.
+6. ✅ **Crypto** — CoinGecko integration, canonical symbols through the ledger.
+7. ✅ **Demo account** — seeded, one-click, not yet verified against live DB.
+8. 🔲 **Cron wiring** — `vercel.json` crons for all three sync routes.
+9. 🔲 **Demo account verification** — confirm against live DB.
+10. 🔲 **Billing page** — `/billing` UI shell, no payment logic yet.
+11. 🔲 **CSV import** — transaction ingestion step 2.
+12. 🔲 **AI debrief layer** — last, after the math is solid and `ANTHROPIC_API_KEY` is set.
 
 ### Analytics Engine Layout
-
-Step 1's "pure calculation module" is three files, one folder — not separate services, not separate folders. They're the same layer (pure functions, no DB/network calls) that compose in sequence:
 
 ```
 lib/analytics/
   types.ts             // shared: Holding, Lot, ReturnMetrics, RiskMetrics
-  holdings-engine.ts    // replays the transaction log → current positions + cost basis. No prices needed.
-  returns-engine.ts     // holdings + cash-flow timeline + live prices → TWR, MWR/XIRR, unrealized P&L
-  risk-engine.ts         // holdings + historical OHLC + benchmark → beta, volatility, drawdown, Sharpe, correlation matrix
+  holdings-engine.ts   // replays the transaction log → current positions + cost basis
+  returns-engine.ts    // holdings + cash-flow timeline + live prices → TWR, MWR/XIRR, unrealized P&L
+  risk-engine.ts       // holdings + historical OHLC + benchmark → beta, volatility, drawdown, Sharpe, correlation matrix
 ```
 
-Each is independently unit-testable with fixture data. A route handler (e.g. `app/api/portfolio/route.ts`) fetches transactions/prices from the DB and Finnhub, then hands them to these functions — the engines themselves never touch Mongo or the network. Same functions get reused by the AI debrief layer later, no rewrite needed.
+Each is independently unit-testable with fixture data. Route handlers fetch transactions/prices from DB and Finnhub, then hand them to these functions — the engines themselves never touch Mongo or the network.
 
 ---
 
@@ -261,8 +360,8 @@ Each is independently unit-testable with fixture data. A route handler (e.g. `ap
 
 A reviewer gives this project about three minutes. Two things decide the outcome:
 
-- **A seeded demo account, one click, no signup wall.** A realistic 15-holding portfolio with two years of transactions — including a stock split, so the corporate-actions handling is actually visible without the reviewer doing anything. This single decision probably beats any three features on this list for actual conversion.
-- **The first screen proves the moat, not the UI.** Cost basis and returns need to be visibly _correct_ — a TWR/MWR split shown side by side, a correlation matrix that says something real — not just another price ticker with a nice dark theme.
+- **A seeded demo account, one click, no signup wall.** A realistic 15-holding portfolio with two years of transactions — including a stock split — visible without the reviewer doing anything.
+- **The first screen proves the moat, not the UI.** TWR/MWR split shown side by side, a correlation matrix that says something real — not just another price ticker with a nice dark theme.
 
 ---
 
@@ -274,21 +373,183 @@ A reviewer gives this project about three minutes. Two things decide the outcome
 
 ---
 
-_Built by Vahe Ohanyan. © 2026 Stoxly._
-
-### Search — Financial Instrument Discovery
+## Search — Financial Instrument Discovery
 
 Search is Stoxly's financial-instrument discovery layer. It resolves a user's search intent into a canonical, identifiable instrument that the rest of the platform can operate on.
 
-The initial supported universe is:
+Initial supported universe: stocks/equities, cryptoassets, ETFs, indices/benchmarks. Mutual funds, bonds, commodities, FX, and derivatives are out of scope for now. Search is responsible for **finding and identifying instruments**, not analyzing, recommending, or forecasting them.
 
-* **Stocks / Equities** — AAPL, NVDA, TSLA
-* **Cryptoassets** — BTC, ETH, SOL
-* **ETFs** — SPY, QQQ, VOO
-* **Indices / Benchmarks** — S&P 500, NASDAQ-100
+---
 
-Stocks, ETFs, and cryptoassets can become portfolio holdings, while indices primarily serve as reference instruments for benchmarking and risk analytics.
+Addendum: Product Research & Strategic Critique
+This section was added after a deep product-research review. It synthesizes findings from user-behavior patterns, app-store friction analysis, cross-industry mechanisms, and founder-level strategic thinking. Treat these as high-priority insights and open questions, not settled decisions.
 
-Mutual funds, bonds, commodities, FX, and other instruments may be added later. **Derivatives (options/futures) are currently out of scope** because they require substantially different financial and portfolio semantics.
+1. Correctness Bug: TWR Approximation Must Be Fixed Before Anything Else
+   Current status: TWR approximates sub-period value using cumulative net cash invested, not actual market value at each flow date. This is wrong whenever price movement between deposits is significant.
 
-Search is responsible for **finding and identifying instruments**, not analyzing, recommending, or forecasting them. The result should provide a canonical Stoxly identifier and instrument type so the same identity can flow consistently through the asset page, watchlist, transaction ledger, quotes, analytics, and AI debrief.
+Why this is critical: Stoxly’s entire positioning is “mathematically correct data.” A single reviewer who knows finance will spot the approximation. The first screen—TWR/MWR split—is the three-minute test. If TWR is approximated, the moat is undermined at the exact moment of first impression.
+
+Action: Move PortfolioSnapshot accumulation (cron wiring) to step 1. Backfill via OHLC if possible. Do not ship the AI debrief, billing, or CSV import until TWR is exact.
+
+2. Onboarding Friction: CSV Import Is Not Step 11
+   Research finding: Onboarding friction is the #1 killer of consumer adoption. Manual entry of 87 transactions is a non-starter for real users.
+
+The demo account solves the reviewer problem. It does not solve the user problem. A real user with an existing brokerage account cannot use Stoxly without CSV import.
+
+Action: Move CSV import to step 2 or 3, immediately after TWR fix and demo verification. The ledger architecture makes this a trivial ingestion path—no mutable positions, just a different Transaction document source.
+
+3. AI Debrief: Prototype Now, Not Last
+   Contradiction in original plan: The AI debrief is called “the product centerpiece” but is deliberately last and blocked by API key.
+
+Risk: Building the entire ledger, risk engine, and billing surface, then discovering the debrief format doesn’t work as imagined.
+
+Action: Build a pure-function prototype of the debrief now, using mock tool calls and fixture portfolio data. Validate:
+
+Output format is useful and understandable
+
+Grounding rule is enforceable (every numeral appears in tool results)
+
+Eval suite catches hallucinations
+
+Users prefer weekly vs. on-demand
+
+This can be done without ANTHROPIC_API_KEY by mocking the Claude response and focusing on the validation layer.
+
+4. Risk Engine: Avoid Invisible Value
+   Problem: risk-engine.ts returns null until enough PriceBar history exists. For new users, the risk row—one of the core moat features—may be invisible for weeks or months.
+
+Action: Provide synthetic or benchmark-based risk estimates when historical data is insufficient, clearly labeled as estimates. Or offer a “risk preview” using sector-level correlations as a placeholder. Do not let the Pro-tier value proposition remain invisible during the critical early-retention window.
+
+5. Monetization: Anchor to Outcomes, Not Features
+   Current pricing: “~$8–15/month” is a range, not a decision.
+
+Research finding: Users will pay for outcomes, not features. Subscription fatigue is real.
+
+Action: Anchor Pro to a single outcome: “Understand your portfolio better than any broker app can explain.” Consider micro-transactions for the debrief (“pay for this report”) as an alternative to subscription. Free tracking, paid intelligence is the right split—but the pricing page must say why it’s worth paying.
+
+6. Shareable Debrief: The Missing Growth Mechanism
+   Research finding: Strava’s success is social proof. Spotify Wrapped is social proof. The AI debrief is Stoxly’s Wrapped.
+
+Action: Design the debrief as a shareable, anonymized artifact. Not a social feed, not followers—but a “portfolio health report” that says “your concentration risk increased 6% this month.” This is a viral growth mechanism that respects the “no social features” boundary.
+
+7. Crypto Analytics: Unified Ledger, Differentiated Views
+   Problem: Crypto users and stock investors are different personas with different needs. The unified ledger is correct for a portfolio view, but the analytics may need to differ.
+
+Action: Keep the append-only ledger for all assets. For analytics, consider asset-class-specific views:
+
+Stocks: beta, Sharpe, sector rotation
+
+Crypto: volatility, drawdown, correlation to BTC/ETH
+
+Both: concentration, correlation matrix
+
+The debrief can say: “Your crypto holdings are 40% of your portfolio and 80% of your risk.”
+
+8. The Debrief Needs a Follow-Up Affordance
+   Current decision: “AI chatbot—the debrief is not a chat interface; it’s a structured, grounded report.” This is correct for the primary interface.
+
+Research finding: AI-native products succeed when they allow delegation with verification, not just static reports.
+
+Action: Add an “ask about this report” affordance that is grounded in the same tool calls. Users will want to drill down: “Why did NVDA contribute 71%?” or “What if I sold 10% of NVDA?” The latter is a simulation, not advice—label it as hypothetical and keep the grounding rule.
+
+9. Domain Literacy: Explain the Moat in the UI
+   Problem: The three-minute test assumes a financially literate reviewer. Most users—even technical ones—may not know what TWR/MWR means.
+
+Action: Add one-line explanations next to each metric:
+
+TWR: “How your strategy performed, ignoring when you added money.”
+
+MWR: “How you actually performed, given your deposit timing.”
+
+Don’t assume domain knowledge. Explain the moat, don’t just display it.
+
+10. Boring App Insight: Embrace Reliability Over Excitement
+    Research finding: Boring, reliable, old-fashioned apps survive because they own a recurring, high-stakes workflow. Stoxly’s core workflow—tracking a portfolio—is boring. The AI debrief is the reward.
+
+Action: Keep the dashboard fast, reliable, predictable. Don’t over-animate, over-gamify, or over-design. Users describe boring apps as “I can’t live without it.” That’s the goal.
+
+11. Revised Build Sequence (Proposed)
+    Based on the above, the recommended order becomes:
+
+Fix TWR approximation — wire PortfolioSnapshot cron, backfill if possible. This is the correctness prerequisite.
+
+Verify demo account against live DB — confirm /dashboard renders real TWR/MWR/holdings.
+
+CSV import — remove onboarding friction for real users.
+
+Prototype AI debrief (mock) — pure function, fixture data, validate format and grounding.
+
+Risk engine estimates — provide synthetic/preview risk metrics for new users.
+
+Billing page — UI shell, outcome-based messaging.
+
+Cron wiring — all sync routes on schedule.
+
+AI debrief layer — once ANTHROPIC_API_KEY is set.
+
+Shareable debrief — anonymized health report as growth mechanism.
+
+Follow-up sandbox — grounded “what-if” simulations on the debrief.
+
+12. Friction Map Applied to Stoxly
+    Friction Type Stoxly’s Current State Risk Opportunity
+    Discovery No public content, no SEO, no community Invisible to users Shareable anonymized health report as viral artifact
+    Onboarding Manual entry only; demo for reviewers High—kills consumer adoption CSV import is the immediate fix
+    Cognitive Dashboard has many panels Moderate—could overwhelm Progressive disclosure; explain metrics
+    Interaction Manual transaction entry High—tedious Bulk edit, recurring templates
+    Information Fragmented across three providers Low—handled well Unified portfolio timeline
+    Trust Grounded AI, no buy/sell signals Low—architecturally sound Publish eval suite; show grounding validation
+    Financial Free tracking, paid intelligence Moderate—subscription fatigue Outcome-based pricing; micro-transactions
+    Social None (deliberately) Low—different product Private benchmarking, shareable report
+    Retention Weekly debrief is habit mechanism Moderate—needs validation “Significant change” alerts, not engagement pings
+    AI Grounded, no hallucination, no chat Low—architecturally sound Follow-up sandbox; “explain this metric”
+    Switching Data export not mentioned High—users fear lock-in Explicit “export your ledger” + data ownership messaging
+13. Cross-Industry Mechanisms for Stoxly
+    Mechanism Source Why It Works Stoxly Application
+    Streaks Duolingo Habit formation “Weekly debrief streak” for Pro users (not portfolio checking—too manipulative)
+    Local-first Obsidian Data ownership Export ledger as CSV/JSON; “your data is yours”
+    Transparency Robinhood’s failure Trust erosion Publish eval suite; show grounding validation
+    Envelope budgeting YNAB Constraint-based behavior “Risk budget”—how much concentration are you willing to accept?
+    Segments Strava Social competition Private benchmarking against a chosen index
+    Keyboard-first Linear Speed and focus Power-user shortcuts for transaction entry
+    Agentic AI Cursor Delegation with review AI suggests “you may have forgotten to log this dividend”
+    Outcome-based pricing Education Pay for results “Pay for the debrief” micro-transaction
+14. Open Questions to Validate
+    Do users actually want a weekly debrief, or is on-demand better?
+
+Is the debrief shareable artifact a growth mechanism or a privacy risk?
+
+Will users pay for outcome-based pricing, or do they expect a flat subscription?
+
+How long until PriceBar history is sufficient for risk analytics? What’s the fallback?
+
+Does the “no chatbot” decision hold when users want to drill into the debrief?
+
+Is the crypto + stock unified ledger actually useful, or do users want separate views?
+
+What is the single most important metric that proves the moat in the three-minute test?
+
+15. Founder Takeaways (Condensed)
+    Fix TWR before anything else. Correctness is the moat.
+
+Move CSV import up. Onboarding friction kills adoption.
+
+Prototype the AI debrief now. Don’t build the whole product around an unvalidated centerpiece.
+
+Provide risk estimates for new users. Invisible value is no value.
+
+Anchor pricing to outcomes. “Understand your portfolio” is worth more than a feature list.
+
+Design the debrief as shareable. That’s the growth mechanism.
+
+Explain the moat in the UI. Don’t assume domain literacy.
+
+Embrace boring reliability. The dashboard is the tool; the debrief is the reward.
+
+Publish the eval suite. Trust is built through transparency.
+
+Challenge every assumption. The TWR gap is disconfirming evidence for “correct over convenient.” The AI debrief’s “deliberately last” placement contradicts its “centerpiece” status. Fix these contradictions before they become product failures.
+
+This response is AI-generated, for reference only.
+
+_Built by Vahe Ohanyan. © 2026 Stoxly._

@@ -6,12 +6,12 @@ const TWO_PI = Math.PI * 2;
 
 const DotField = memo(({
   dotRadius = 4,
-  dotSpacing = 14,
+  dotSpacing = 10,
   cursorRadius = 500,
   cursorForce = 0.1,
   bulgeOnly = true,
-  bulgeStrength = 120,
-  glowRadius = 260,
+  bulgeStrength = 100,
+  glowRadius = 200,
   sparkle = false,
   waveAmplitude = 0,
   gradientFrom = 'rgba(168, 85, 247, 0.35)',

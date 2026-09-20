@@ -20,9 +20,9 @@ export default async function Home() {
       <div className="absolute top-0 left-0 w-full h-dvh -z-10">
         <DotField
           dotRadius={2}
-          dotSpacing={22}
-          bulgeStrength={180}
-          glowRadius={260}
+          dotSpacing={20}
+          bulgeStrength={120}
+          glowRadius={200}
           gradientFrom="rgba(59, 130, 246, 0.4)"
           gradientTo="rgba(59, 130, 246, 0.18)"
           glowColor="#050505"
