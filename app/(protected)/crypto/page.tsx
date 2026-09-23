@@ -16,6 +16,13 @@ const formatPrice = (price: number) =>
 
 const BATCH = 12;
 
+// CoinGecko's free tier rate-limits aggressively, and a forced refresh always
+// bypasses caching to guarantee live data — so unlike the initial/cached load,
+// repeated force-refreshes have no coalescing to fall back on. A per-instance
+// cooldown is what actually stops rapid clicks from tripping 429s, since
+// disabling the button only during the (sub-100ms) in-flight request doesn't.
+const REFRESH_COOLDOWN_MS = 15_000;
+
 const CryptoPage = () => {
   const [assets, setAssets] = useState<CryptoAsset[]>([]);
   const [selectedSymbols, setSelectedSymbols] = useState<string[]>([]);
@@ -28,6 +35,8 @@ const CryptoPage = () => {
   const [analysisLoading, setAnalysisLoading] = useState(false);
   const [visibleCount, setVisibleCount] = useState(BATCH);
   const [error, setError] = useState(false);
+  const [cooldownRemaining, setCooldownRemaining] = useState(0);
+  const cooldownUntilRef = useRef(0);
 
   // ============================================================
   // 1. Load assets from your existing API
@@ -38,11 +47,16 @@ const CryptoPage = () => {
       setVisibleCount(BATCH);
       setError(false);
     } else {
+      if (Date.now() < cooldownUntilRef.current) return Promise.resolve();
+      cooldownUntilRef.current = Date.now() + REFRESH_COOLDOWN_MS;
+      setCooldownRemaining(REFRESH_COOLDOWN_MS / 1000);
       setRefreshing(true);
       setError(false);
     }
 
-    return fetch("/api/crypto")
+    const url = isInitialLoad ? "/api/crypto" : "/api/crypto?forceRefresh=true";
+
+    return fetch(url)
       .then((r) => r.json())
       .then((data) => {
         if (!Array.isArray(data)) {
@@ -104,6 +118,18 @@ const CryptoPage = () => {
       setAnalysisLoading(false);
     }
   };
+
+  // ============================================================
+  // 2b. Tick down the refresh cooldown display
+  // ============================================================
+  useEffect(() => {
+    if (cooldownRemaining <= 0) return;
+    const tick = setInterval(() => {
+      const remainingMs = cooldownUntilRef.current - Date.now();
+      setCooldownRemaining(Math.max(0, Math.ceil(remainingMs / 1000)));
+    }, 1000);
+    return () => clearInterval(tick);
+  }, [cooldownRemaining]);
 
   // ============================================================
   // 3. Poll for analysis status (if processing)
@@ -241,13 +267,17 @@ const CryptoPage = () => {
           <Button
             variant="outline"
             size="sm"
-            disabled={refreshing}
+            disabled={refreshing || cooldownRemaining > 0}
             onClick={() => void loadAssets()}
           >
             <RefreshCw
               className={`size-3.5 ${refreshing ? "animate-spin" : ""}`}
             />
-            {refreshing ? "Refreshing..." : "Refresh"}
+            {refreshing
+              ? "Refreshing..."
+              : cooldownRemaining > 0
+                ? `Refresh (${cooldownRemaining}s)`
+                : "Refresh"}
           </Button>
           <Button
             size="sm"
@@ -395,8 +425,9 @@ const CryptoPage = () => {
 
       {assets.length === 0 ? (
         initialLoading ? (
-          <div className="flex min-h-[50vh] items-center justify-center">
+          <div className="flex min-h-[50vh] flex-col items-center justify-center gap-3">
             <Classic className="size-10" />
+            <p className="text-gray-500 text-sm">Loading crypto markets...</p>
           </div>
         ) : (
           <div className="rounded-xl border border-gray-800 bg-gray-900/50 px-6 py-12 text-center">

@@ -1,10 +1,14 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { CRYPTO_ASSETS } from "@/constants/cryptoAssets";
 import { fetchCryptoQuotes } from "@/lib/coingecko";
 
-export async function GET(): Promise<NextResponse> {
+export async function GET(request: NextRequest): Promise<NextResponse> {
   try {
-    const quotes = await fetchCryptoQuotes(CRYPTO_ASSETS.map((asset) => asset.symbol));
+    const forceRefresh = request.nextUrl.searchParams.get("forceRefresh") === "true";
+    const quotes = await fetchCryptoQuotes(
+      CRYPTO_ASSETS.map((asset) => asset.symbol),
+      { forceRefresh },
+    );
     const quoteBySymbol = new Map(quotes.map((quote) => [quote.symbol, quote]));
 
     const assets = CRYPTO_ASSETS.flatMap((asset) => {

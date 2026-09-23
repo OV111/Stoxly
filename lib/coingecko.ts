@@ -76,11 +76,11 @@ export async function searchCrypto(query: string): Promise<Instrument[]> {
       return coins.map((coin: any) => ({
         symbol: coin.symbol.toUpperCase(),
         name: coin.name,
-        type: 'crypto',
+        type: "crypto",
         logo: coin.thumb || undefined,
-        exchange: 'CoinGecko',
-        market: 'Global',
-        currency: 'USD',
+        exchange: "CoinGecko",
+        market: "Global",
+        currency: "USD",
       }));
     } catch (err) {
       console.error("[coingecko] searchCrypto failed", err);
@@ -91,14 +91,30 @@ export async function searchCrypto(query: string): Promise<Instrument[]> {
 /**
  * Fetches crypto market data in one request.
  */
-export async function fetchCryptoQuotes(symbols: string[]): Promise<Quote[]> {
+export async function fetchCryptoQuotes(
+  symbols: string[],
+  options?: { forceRefresh?: boolean },
+): Promise<Quote[]> {
   const cryptoSymbols = [...new Set(symbols.filter(isCryptoSymbol))];
   if (cryptoSymbols.length === 0) return [];
 
   const ids = cryptoSymbols.map((symbol) => symbol.slice("CRYPTO:".length));
   const cacheKey = [...ids].sort().join(",");
+  const forceRefresh = options?.forceRefresh ?? false;
 
-  return singleflight(`coingecko:markets:${cacheKey}`, async () => {
+  // forceRefresh still bypasses the singleflight key — otherwise a refresh
+  // call that lands while a cached-path call is already in flight would just
+  // join that stale promise instead of triggering a real upstream fetch. But
+  // it's bucketed to a short window rather than keyed on the exact millisecond:
+  // several force-refreshes landing within the same window (rapid clicks,
+  // multiple open tabs) still coalesce into one upstream call instead of each
+  // burning a separate hit against CoinGecko's free-tier rate limit.
+  const FORCE_REFRESH_BUCKET_MS = 3_000;
+  const key = forceRefresh
+    ? `coingecko:markets:${cacheKey}:force:${Math.floor(Date.now() / FORCE_REFRESH_BUCKET_MS)}`
+    : `coingecko:markets:${cacheKey}`;
+
+  return singleflight(key, async () => {
     try {
       const params = new URLSearchParams({
         vs_currency: "usd",
@@ -107,10 +123,24 @@ export async function fetchCryptoQuotes(symbols: string[]): Promise<Quote[]> {
         precision: "full",
         sparkline: "true",
       });
-      const response = await fetch(`${BASE_URL}/coins/markets?${params}`, {
-        next: { revalidate: TTL.QUOTE },
+      let response = await fetch(`${BASE_URL}/coins/markets?${params}`, {
+        ...(forceRefresh
+          ? { cache: "no-store" as const }
+          : { next: { revalidate: TTL.QUOTE } }),
         signal: AbortSignal.timeout(8_000),
       });
+
+      // A forced refresh that gets rate-limited shouldn't return nothing —
+      // fall back to whatever Next's fetch cache still has (up to TTL.QUOTE
+      // old) rather than blanking the UI over a 429.
+      if (!response.ok && response.status === 429 && forceRefresh) {
+        console.error("[coingecko] force refresh rate-limited, falling back to cache");
+        response = await fetch(`${BASE_URL}/coins/markets?${params}`, {
+          next: { revalidate: TTL.QUOTE },
+          signal: AbortSignal.timeout(8_000),
+        });
+      }
+
       if (!response.ok) {
         console.error(`[coingecko] markets request failed: ${response.status}`);
         return [];
@@ -135,8 +165,14 @@ export async function fetchCryptoQuotes(symbols: string[]): Promise<Quote[]> {
             : undefined;
 
         const current = market.current_price;
-        const rawLow = sparkline && sparkline.length > 0 ? Math.min(...sparkline) : (market.low_24h ?? current);
-        const rawHigh = sparkline && sparkline.length > 0 ? Math.max(...sparkline) : (market.high_24h ?? current);
+        const rawLow =
+          sparkline && sparkline.length > 0
+            ? Math.min(...sparkline)
+            : (market.low_24h ?? current);
+        const rawHigh =
+          sparkline && sparkline.length > 0
+            ? Math.max(...sparkline)
+            : (market.high_24h ?? current);
         const low52 = Math.min(rawLow, current);
         const high52 = Math.max(rawHigh, current);
 
