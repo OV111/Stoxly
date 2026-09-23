@@ -42,7 +42,7 @@ const Hero = () => {
   return (
     <section className="relative flex flex-col items-center text-center px-6 h-[calc(100dvh-4rem)] overflow-hidden">
       <div className="flex flex-1 pb-20 flex-col items-center justify-center gap-8 sm:gap-10 min-h-0">
-        <div className="flex flex-col items-center gap-3">
+        <h1 className="flex flex-col items-center gap-3">
           <GradientText
             colors={["#ffffff", "#3b82f6", "#60a5fa", "#ffffff"]}
             animationSpeed={6}
@@ -58,7 +58,7 @@ const Hero = () => {
             pauseBetweenAnimations={1.5}
             textClassName="bg-gradient-to-br from-blue-100 via-blue-400 to-blue-600 bg-clip-text text-transparent"
           />
-        </div>
+        </h1>
 
         <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-4 sm:gap-x-8 text-sm">
           <div className="flex flex-col items-center gap-1">

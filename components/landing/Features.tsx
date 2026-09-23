@@ -1,5 +1,6 @@
 "use client";
 import { useState, useEffect } from "react";
+import Image from "next/image";
 import {
   ChartNoAxesCombined,
   ArrowDownNarrowWide,
@@ -126,7 +127,13 @@ const Features = () => {
                 <div className="flex justify-between items-center" key={crypto.symbol}>
                   <div className="flex items-center gap-2">
                     {crypto.image && (
-                      <img src={crypto.image} alt={crypto.name} className="w-5 h-5 rounded-full" />
+                      <Image
+                        src={crypto.image}
+                        alt={crypto.name}
+                        width={20}
+                        height={20}
+                        className="w-5 h-5 rounded-full"
+                      />
                     )}
                     <span className="text-green-400 font-medium">
                       {crypto.symbol.toUpperCase()}
@@ -170,7 +177,13 @@ const Features = () => {
                 <div className="flex justify-between items-center" key={crypto.symbol}>
                   <div className="flex items-center gap-2">
                     {crypto.image && (
-                      <img src={crypto.image} alt={crypto.name} className="w-5 h-5 rounded-full" />
+                      <Image
+                        src={crypto.image}
+                        alt={crypto.name}
+                        width={20}
+                        height={20}
+                        className="w-5 h-5 rounded-full"
+                      />
                     )}
                     <span className="text-red-400 font-medium">
                       {crypto.symbol.toUpperCase()}

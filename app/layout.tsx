@@ -7,10 +7,29 @@ const montserrat = Montserrat({
   subsets: ["latin"],
 });
 
+const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://stoxly.app";
+const siteDescription =
+  "Stoxly is a portfolio intelligence engine that explains what happened to your investments, why, and how your risk has changed — powered by mathematically correct return and risk analytics.";
+
 export const metadata: Metadata = {
-  title: "Stoxly",
-  description:
-    "Track and analyze stock market data with our powerful tools and insights.",
+  metadataBase: new URL(siteUrl),
+  title: {
+    default: "Stoxly — Portfolio Intelligence",
+    template: "%s | Stoxly",
+  },
+  description: siteDescription,
+  openGraph: {
+    type: "website",
+    siteName: "Stoxly",
+    title: "Stoxly — Portfolio Intelligence",
+    description: siteDescription,
+    url: siteUrl,
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Stoxly — Portfolio Intelligence",
+    description: siteDescription,
+  },
 };
 
 export default function RootLayout({

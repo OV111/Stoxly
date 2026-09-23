@@ -8,6 +8,7 @@
     "start": "next start",
     "lint": "eslint",
     "check-db": "node scripts/check-db.mjs",
+    "check-seo": "node scripts/check-seo.mjs",
     "test": "vitest run",
     "test:watch": "vitest"
   },
