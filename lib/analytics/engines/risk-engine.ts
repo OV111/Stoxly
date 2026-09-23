@@ -1,11 +1,14 @@
 import PriceBar from "@/models/PriceBar";
-import { Holding, RiskMetrics } from "./types";
+import { Holding, RiskMetrics } from "../types";
 
 // Formulas: beta = cov(portfolioReturns, benchmarkReturns) / var(benchmarkReturns), on
 // date-aligned daily simple returns. Volatility = stdev(dailyReturns) * sqrt(252) (annualized).
 // Max drawdown = worst peak-to-trough decline in the cumulative-return curve (compounded from 1.0).
 // Sharpe = (annualizedReturn - riskFreeRate) / annualizedVolatility. Correlation = Pearson r
 // between each pair of holdings' daily return series.
+// Sortino = (annualizedReturn - riskFreeRate) / annualizedDownsideDeviation, where downside
+// deviation only counts daily returns below 0 (the minimum acceptable return) — a stricter
+// Sharpe variant that doesn't penalize upside volatility. Calmar = annualizedReturn / |maxDrawdown|.
 
 const TRADING_DAYS_PER_YEAR = 252;
 const RISK_FREE_RATE = 0.04; // placeholder — real impl would look up a live Treasury yield
@@ -58,6 +61,15 @@ function stdev(xs: number[]): number {
   if (xs.length < 2) return 0;
   const m = mean(xs);
   const variance = xs.reduce((s, x) => s + (x - m) ** 2, 0) / (xs.length - 1);
+  return Math.sqrt(variance);
+}
+
+/** Downside deviation: stdev of returns below the minimum acceptable return (0), including
+ * zero for returns at or above it so the sample size matches the full return series. */
+function downsideDeviation(xs: number[], minimumAcceptableReturn = 0): number {
+  if (xs.length < 2) return 0;
+  const downsideSquares = xs.map((x) => (x < minimumAcceptableReturn ? (x - minimumAcceptableReturn) ** 2 : 0));
+  const variance = downsideSquares.reduce((s, x) => s + x, 0) / (xs.length - 1);
   return Math.sqrt(variance);
 }
 
@@ -198,6 +210,14 @@ export async function calculateRiskMetrics(
   const annualizedReturn = mean(portfolioReturnsChrono) * TRADING_DAYS_PER_YEAR;
   const sharpe = annualizedVolatility !== 0 ? (annualizedReturn - RISK_FREE_RATE) / annualizedVolatility : 0;
 
+  // Sortino ratio: same numerator as Sharpe, but only penalizes downside volatility.
+  const annualizedDownsideDeviation = downsideDeviation(portfolioReturnsChrono) * Math.sqrt(TRADING_DAYS_PER_YEAR);
+  const sortino =
+    annualizedDownsideDeviation !== 0 ? (annualizedReturn - RISK_FREE_RATE) / annualizedDownsideDeviation : 0;
+
+  // Calmar ratio: annualized return relative to the worst peak-to-trough decline.
+  const calmar = maxDrawdown !== 0 ? annualizedReturn / Math.abs(maxDrawdown) : 0;
+
   // Correlation matrix: pairwise Pearson correlation between each pair of holdings.
   const correlationMatrix: Record<string, Record<string, number>> = {};
   for (const symbolA of activeSymbols) {
@@ -218,6 +238,8 @@ export async function calculateRiskMetrics(
     volatility: annualizedVolatility,
     maxDrawdown,
     sharpe,
+    sortino,
+    calmar,
     correlationMatrix,
   };
 }

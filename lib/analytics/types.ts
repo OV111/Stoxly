@@ -30,5 +30,7 @@ export interface RiskMetrics {
   volatility: number;
   maxDrawdown: number;
   sharpe: number;
+  sortino: number;
+  calmar: number;
   correlationMatrix: Record<string, Record<string, number>>;
 }

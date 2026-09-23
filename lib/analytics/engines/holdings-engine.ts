@@ -1,5 +1,5 @@
 import { ITransaction } from "@/models/Transactions";
-import { Holding } from "./types";
+import { Holding } from "../types";
 
 // Share quantities are floats, and fractional shares are normal, so an exactly
 // closed position can carry ~1e-17 of float dust. Anything at or below this is

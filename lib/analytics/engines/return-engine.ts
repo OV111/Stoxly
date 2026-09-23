@@ -1,5 +1,5 @@
 import { ITransaction } from "@/models/Transactions";
-import { CashFlow, Holding, ReturnMetrics } from "./types";
+import { CashFlow, Holding, ReturnMetrics } from "../types";
 
 // TWR: split the timeline at every external cash flow (DEPOSIT/WITHDRAWAL only —
 // buys/sells are internal reallocations), compute each sub-period's simple return

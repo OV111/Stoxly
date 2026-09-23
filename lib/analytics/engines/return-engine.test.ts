@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { calculateReturns } from "./return-engine";
-import { Holding } from "./types";
+import { Holding } from "../types";
 import { ITransaction } from "@/models/Transactions";
 
 // NOTE ON TWR: the engine currently approximates historical market value with

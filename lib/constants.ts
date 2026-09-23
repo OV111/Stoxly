@@ -10,6 +10,7 @@ export const navbarItems: NavbarItem[] = [
   { label: "Watchlist", href: "/watchlist" },
   { label: "Crypto", href: "/crypto" },
   // { label: "News", href: "/news" },
-  {label:"Intelligence",href:"/intelligence"},
+  { label: "Intelligence", href: "/intelligence" },
+  { label: "Journal", href: "/journal" },
   // { label: "AI", href: "/ai" },
 ];

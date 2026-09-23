@@ -3,7 +3,7 @@ import Transaction from "@/models/Transactions";
 import PortfolioSnapshot, {
   IPortfolioSnapshot,
 } from "@/models/PortfolioSnapshot";
-import { buildHoldings } from "@/lib/analytics/holdings-engine";
+import { buildHoldings } from "@/lib/analytics/engines/holdings-engine";
 import { fetchQuotes } from "@/lib/finnhub";
 
 export type PortfolioSnapshotResult = IPortfolioSnapshot;
