@@ -6,7 +6,7 @@
 
 ## Current Status
 
-_Last updated: 2026-09-13. Update this section whenever a build-sequence step lands._
+_Last updated: 2026-09-23. Update this section whenever a build-sequence step lands._
 
 **Done:**
 
@@ -38,6 +38,11 @@ _Last updated: 2026-09-13. Update this section whenever a build-sequence step la
 
 **Done — seeded demo account:** one-click, no signup wall. `lib/demoSeed.ts` (deterministic ~2-year, 15-holding transaction set, includes an NVDA 4:1 split, a partial AAPL sell for realized P&L, a TSLA loss, and recurring dividends) + `lib/demoAccount.ts` (idempotent find-or-create + seed-once-if-empty) + `POST /api/auth/demo` (issues a real session cookie, same path as sign-in) + `TryDemoButton` wired into the landing nav (desktop/mobile) and the sign-in page. **Not yet verified against a live DB** — run it and confirm `/dashboard` renders real TWR/MWR/holdings before trusting it.
 
+**In progress:**
+
+- **Investment Journal** (see "Investment Memory & Decision Intelligence" section below) — `models/InvestmentDecision.ts`, `models/InvestmentNote.ts`, `app/(protected)/journal/`, `app/api/journal/`, `components/journal/`, `lib/journal/format.ts`, `types/journal.ts`, `hooks/useJournal.ts` all under active development. Not yet reflected as "done" until wired end-to-end and verified against a live DB.
+- **Billing scaffolding** — `app/api/billing/` route stubs exist; UI shell not yet confirmed complete.
+
 **Not started / remaining:**
 
 - **AI debrief layer** (see "The AI Debrief" section below) — deliberately last, per Build Sequence. Blocked: no `ANTHROPIC_API_KEY` in `.env.local` yet.
@@ -45,6 +50,8 @@ _Last updated: 2026-09-13. Update this section whenever a build-sequence step la
 - **CSV import** — the immediate onboarding friction fix. Preserves ledger architecture, just changes the ingestion mechanism. See "Onboarding" section below.
 - **Cron wiring** — `/api/pricebars/sync`, `/api/snapshots/sync`, and `/api/alerts/evaluate` are all manual-trigger routes. None run on a schedule yet; they need a `vercel.json` crons entry. Until then `PortfolioSnapshot` stays empty and the history chart shows its empty state.
 - `risk-engine.ts` is untested — it queries `PriceBar` directly, so unit testing needs either dependency injection of the price-bar fetch or `mongodb-memory-server`. Refactoring it to accept price series as an argument (like the other two engines) is the change to make first.
+- **Sortino + Calmar ratios** not yet added to `risk-engine.ts` — see "HARLF Paper" section below for the formulas.
+- **Sentiment engine** (`lib/analytics/sentiment-engine.ts`) does not exist yet — planned as a fixture-tested prototype, not live-wired to a news source yet.
 - `app/api/market/chart/route.ts` — still a stub.
 - Data input is manual-entry only currently — CSV import is the next ingestion step (no brokerage account linking yet).
 - `PortfolioHistoryPanel` reuses `components/stock/PriceChart.tsx` by padding snapshot values into unused OHLC fields. Works, but the clean fix is an optional `values: number[]` prop on `PriceChart` that skips the candle mapping.
@@ -135,7 +142,31 @@ FIFO / LIFO / specific-lot-ID cost basis, realized vs. unrealized P&L split. Bor
 
 ### Risk analytics
 
-Beta against a benchmark, rolling volatility, max drawdown, Sharpe ratio, and a correlation matrix across holdings — "you think you're diversified; these five names are 0.9 correlated." This is rare because it's actual _insight_, not a restatement of data the user already has.
+Beta against a benchmark, rolling volatility, max drawdown, Sharpe ratio, Sortino ratio, Calmar ratio, and a correlation matrix across holdings — "you think you're diversified; these five names are 0.9 correlated." This is rare because it's actual _insight_, not a restatement of data the user already has.
+
+---
+
+## HARLF Paper — What Transfers, What Doesn't
+
+_Added 2026-09-22, after reviewing "HARLF: Hierarchical Reinforcement Learning and Lightweight LLM-Driven Sentiment Integration for Financial Portfolio Optimization" (Coriat & Benhamou, IJCAI 2025 FinLLM Workshop)._
+
+HARLF trains a three-tier RL system (base agents → meta-agents → super-agent) that combines FinBERT news sentiment with quantitative metrics to output monthly portfolio allocation weights — i.e., it's a trading-signal engine. That output mechanism is exactly what Stoxly's closed "no trading signals" decision rules out, so the RL allocation machinery itself (§6–7 of the paper) does not cross over. What does cross over is the paper's **measurement layer** — the inputs the RL system consumes, which are legitimate grounded facts under Stoxly's own architecture:
+
+1. **Sentiment score as a grounded data point.** HARLF's Algorithm 1 computes `S_t = Σ(P_positive − P_negative) / N` — a FinBERT sentiment score averaged over N news articles per asset per time window. This is a measurement, not a prediction, so it fits the grounding rule. Usable in the AI Debrief ("NVDA contributed 71% of weekly gains; news sentiment on NVDA was net positive over the same period") and in Decision Reviews as corroborating context — stated as correlation, never as thesis validation. New file: `lib/analytics/sentiment-engine.ts`, same shape as the other engines (pure function, fixture-testable; route handlers do the news fetching).
+2. **Sortino and Calmar ratios.** HARLF computes these monthly alongside Sharpe/volatility/max drawdown (§3.3). Same category of math as what `risk-engine.ts` already has — cheap, direct addition, zero architectural conflict.
+3. **Benchmark comparison methodology.** HARLF's results tables (strategy vs. equal-weighted vs. S&P 500 across ROI/Sharpe/volatility, §4.4/§8) are a clean template for the planned "custom benchmarks" Pro feature — same side-by-side shape, applied to the user's actual MWR/TWR instead of a backtested policy. No new engine needed; a query/aggregation layer over `returns-engine.ts` and `risk-engine.ts` output.
+4. **Risk-tolerance weighting, reframed as a display lens, not a decision input.** HARLF's reward function (`Reward = α₁·ROI − α₂·MDD − α₃·σ`, §5.2) optimizes tradeoffs *for* the system. Stoxly cannot reuse it that way, but the same α-weighted idea works as a user-set "risk budget" slider that only changes how existing metrics are *displayed* ("above your stated comfort line") — never as an input to any suggestion.
+5. **Retrospective what-if simulation.** HARLF's backtesting (§5.4: train 2003–2017, evaluate out-of-sample 2018–2024) is evaluation of an RL policy, not a per-user counterfactual — but the mechanical idea (replay historical prices against a hypothetical rule, measure resulting ROI/Sharpe/drawdown) maps to the planned "what if I'd sold 10% of NVDA" sandbox: strictly retrospective, run only on the user's actual holdings, labeled hypothetical, never advisory.
+6. **Explicitly excluded, for contrast: the RL allocation engine itself.** Base agents (PPO/SAC/DDPG/TD3 via Stable Baselines 3) → meta-agents (PyTorch nets combining base agent outputs, §6) → super-agent (final allocation weights, §7, Algorithm 2) is HARLF's actual centerpiece. It's a system that decides what to buy/sell/hold and by how much — precisely the trading-signal shape Stoxly's architecture forbids. This is the one piece that does not cross over.
+
+**Priority read (effort vs. impact vs. what's already blocked):**
+
+1. **Sortino + Calmar** — do first. Same inputs `risk-engine.ts` already has, no new data source, ~20 minutes of work.
+2. **Sentiment engine, prototype only** — fixture-tested pure function with mock article input, no live news scraping yet. High strategic value (feeds both the AI Debrief and Decision Reviews) but the debrief itself isn't built, so don't wire live infra prematurely — consistent with the addendum's "prototype the debrief before the API key exists" guidance.
+3. **Benchmark comparison table** — easy, but low urgency until the billing/Pro-tier surface exists.
+4. **Risk-budget display lens** — pure UX polish, zero backend risk, fine to defer.
+5. **What-if sandbox** — depends on the AI Debrief existing first (it's a follow-up affordance on the debrief); building it earlier has no destination.
+6. **RL allocation engine** — not adopted, ever. Conflicts with the closed "no trading signals" decision.
 
 ---
 
@@ -177,9 +208,23 @@ Three decisions embedded here that matter more than any feature:
 
 ## Systems Problems Worth Solving
 
-- **Request coalescing / singleflight over Finnhub** — 50 concurrent requests for AAPL collapse to 1 upstream call, plus a circuit breaker.
-- **Exactly-once alert delivery** — idempotency keys, a fired-state transition that survives worker retries, dedupe so a price oscillating around a threshold doesn't fire 40 emails.
-- **Backfill/reconciliation job** — providers revise history after the fact; a job that detects drift between stored bars and source data is unglamorous and extremely "real system."
+_Audited 2026-09-23 against the actual codebase, not aspirationally — "Applied" rows are verified in code, not planned._
+
+Backend infrastructure patterns (the "systems design" layer — how the app behaves under load, failure, and time, distinct from code organization) that are relevant to Stoxly, what's already applied, and where:
+
+| Pattern | Status | Where |
+| --- | --- | --- |
+| Request coalescing (singleflight) | ✅ Applied | `lib/finnhub.ts`, `lib/coingecko.ts` — every external call wrapped in `singleflight(key, fn)`; 50 concurrent requests for AAPL collapse to 1 upstream call |
+| Response caching | ✅ Applied | Same two files — `next: { revalidate: TTL.QUOTE }`, Next.js's fetch-level cache |
+| Request timeout | ✅ Applied | Same two files — `signal: AbortSignal.timeout(5_000–8_000)` on every external fetch, so one slow upstream can't hang a route |
+| Durable idempotent cache | ✅ Applied | `models/PortfolioSnapshot.ts` + `lib/portfolioSnapshotSync.ts` — unique on `{userId, snapshotDate}` |
+| Idempotency / exactly-once delivery | ✅ Applied | `lib/alertEvaluator.ts` — `findOneAndUpdate` compare-and-swap fired-state transition, so a price oscillating around a threshold doesn't fire 40 emails |
+| **Job queue / cron scheduling** | 🔲 Missing — **highest priority** | Needs a `vercel.json` crons entry hitting `/api/pricebars/sync`, `/api/snapshots/sync`, `/api/alerts/evaluate` on a schedule. Not "build a queue" — these routes already exist and `/api/alerts/evaluate` is already cron-secret-guarded; apply the same guard to the other two. Everything downstream depends on this: `PortfolioSnapshot` stays empty, TWR stays approximated, risk metrics stay sparse until it runs unattended. |
+| **Backfill / reconciliation job** | 🔲 Missing | Would be a new route (e.g. `/api/pricebars/reconcile`) comparing stored `PriceBar` rows against a fresh provider pull for a date range and patching drift. This is what actually fixes the TWR approximation gap — TWR needs complete, correct historical `PriceBar` data, not just whatever partial sync happened to run. |
+| **Circuit breaker** | 🔲 Missing | Belongs in the same provider files that already have singleflight/timeout (`finnhub.ts`, `coingecko.ts`, `twelvedata.ts`). Currently a failing upstream just gets retried on every request at full rate. Matters specifically because of free-tier rate limits (TwelveData 800/day, CoinGecko free tier) — without a breaker, a provider outage burns the daily quota on failed retries instead of backing off. |
+| **Rate limiting (inbound, on Stoxly's own API)** | 🔲 Missing — low priority now | Would sit in front of routes like `/api/journal`, `/api/portfolio` if the app goes multi-tenant/public. Not a live risk with a single user; build right before any public launch, not before. |
+
+**Recommended build order:** cron wiring first (unblocks the TWR fix and risk metrics) → backfill/reconciliation (actually fixes TWR) → circuit breaker (protects rate-limited free-tier quotas) → rate limiting (only matters once there are other users to abuse it).
 
 ---
 
@@ -340,16 +385,20 @@ Order, in priority:
 9. 🔲 **Demo account verification** — confirm against live DB.
 10. 🔲 **Billing page** — `/billing` UI shell, no payment logic yet.
 11. 🔲 **CSV import** — transaction ingestion step 2.
-12. 🔲 **AI debrief layer** — last, after the math is solid and `ANTHROPIC_API_KEY` is set.
+12. 🔲 **Sortino + Calmar ratios** — extend `risk-engine.ts`, same inputs already in use. Cheap, do alongside the TWR fix.
+13. 🔲 **Sentiment engine prototype** — `lib/analytics/sentiment-engine.ts`, fixture-tested, feeds the AI debrief prototype as a grounded input alongside TWR/MWR/risk metrics.
+14. 🔲 **Benchmark comparison table** — query layer over existing engines, ships as part of the "custom benchmarks" Pro feature.
+15. 🔲 **AI debrief layer** — last, after the math is solid and `ANTHROPIC_API_KEY` is set.
 
 ### Analytics Engine Layout
 
 ```
 lib/analytics/
-  types.ts             // shared: Holding, Lot, ReturnMetrics, RiskMetrics
+  types.ts             // shared: Holding, Lot, ReturnMetrics, RiskMetrics, SentimentScore
   holdings-engine.ts   // replays the transaction log → current positions + cost basis
   returns-engine.ts    // holdings + cash-flow timeline + live prices → TWR, MWR/XIRR, unrealized P&L
-  risk-engine.ts       // holdings + historical OHLC + benchmark → beta, volatility, drawdown, Sharpe, correlation matrix
+  risk-engine.ts       // holdings + historical OHLC + benchmark → beta, volatility, drawdown, Sharpe, Sortino, Calmar, correlation matrix
+  sentiment-engine.ts  // per-asset news articles → sentiment score per time window (prototype, fixture-tested; see "HARLF Paper" section)
 ```
 
 Each is independently unit-testable with fixture data. Route handlers fetch transactions/prices from DB and Finnhub, then hand them to these functions — the engines themselves never touch Mongo or the network.
@@ -381,176 +430,166 @@ Initial supported universe: stocks/equities, cryptoassets, ETFs, indices/benchma
 
 ---
 
-Addendum: Product Research & Strategic Critique
+## Addendum: Product Research & Strategic Critique
+
 This section was added after a deep product-research review. It synthesizes findings from user-behavior patterns, app-store friction analysis, cross-industry mechanisms, and founder-level strategic thinking. Treat these as high-priority insights and open questions, not settled decisions.
 
-1. Correctness Bug: TWR Approximation Must Be Fixed Before Anything Else
-   Current status: TWR approximates sub-period value using cumulative net cash invested, not actual market value at each flow date. This is wrong whenever price movement between deposits is significant.
+### 1. Correctness Bug: TWR Approximation Must Be Fixed Before Anything Else
 
-Why this is critical: Stoxly’s entire positioning is “mathematically correct data.” A single reviewer who knows finance will spot the approximation. The first screen—TWR/MWR split—is the three-minute test. If TWR is approximated, the moat is undermined at the exact moment of first impression.
+**Current status:** TWR approximates sub-period value using cumulative net cash invested, not actual market value at each flow date. This is wrong whenever price movement between deposits is significant.
 
-Action: Move PortfolioSnapshot accumulation (cron wiring) to step 1. Backfill via OHLC if possible. Do not ship the AI debrief, billing, or CSV import until TWR is exact.
+**Why this is critical:** Stoxly's entire positioning is "mathematically correct data." A single reviewer who knows finance will spot the approximation. The first screen — TWR/MWR split — is the three-minute test. If TWR is approximated, the moat is undermined at the exact moment of first impression.
 
-2. Onboarding Friction: CSV Import Is Not Step 11
-   Research finding: Onboarding friction is the #1 killer of consumer adoption. Manual entry of 87 transactions is a non-starter for real users.
+**Action:** Move `PortfolioSnapshot` accumulation (cron wiring) to step 1. Backfill via OHLC if possible. Do not ship the AI debrief, billing, or CSV import until TWR is exact.
+
+### 2. Onboarding Friction: CSV Import Is Not Step 11
+
+**Research finding:** Onboarding friction is the #1 killer of consumer adoption. Manual entry of 87 transactions is a non-starter for real users.
 
 The demo account solves the reviewer problem. It does not solve the user problem. A real user with an existing brokerage account cannot use Stoxly without CSV import.
 
-Action: Move CSV import to step 2 or 3, immediately after TWR fix and demo verification. The ledger architecture makes this a trivial ingestion path—no mutable positions, just a different Transaction document source.
+**Action:** Move CSV import to step 2 or 3, immediately after the TWR fix and demo verification. The ledger architecture makes this a trivial ingestion path — no mutable positions, just a different `Transaction` document source.
 
-3. AI Debrief: Prototype Now, Not Last
-   Contradiction in original plan: The AI debrief is called “the product centerpiece” but is deliberately last and blocked by API key.
+### 3. AI Debrief: Prototype Now, Not Last
 
-Risk: Building the entire ledger, risk engine, and billing surface, then discovering the debrief format doesn’t work as imagined.
+**Contradiction in original plan:** The AI debrief is called "the product centerpiece" but is deliberately last and blocked by API key.
 
-Action: Build a pure-function prototype of the debrief now, using mock tool calls and fixture portfolio data. Validate:
+**Risk:** Building the entire ledger, risk engine, and billing surface, then discovering the debrief format doesn't work as imagined.
 
-Output format is useful and understandable
+**Action:** Build a pure-function prototype of the debrief now, using mock tool calls and fixture portfolio data. Validate:
 
-Grounding rule is enforceable (every numeral appears in tool results)
+- Output format is useful and understandable
+- Grounding rule is enforceable (every numeral appears in tool results)
+- Eval suite catches hallucinations
+- Users prefer weekly vs. on-demand
 
-Eval suite catches hallucinations
+This can be done without `ANTHROPIC_API_KEY` by mocking the Claude response and focusing on the validation layer.
 
-Users prefer weekly vs. on-demand
+### 4. Risk Engine: Avoid Invisible Value
 
-This can be done without ANTHROPIC_API_KEY by mocking the Claude response and focusing on the validation layer.
+**Problem:** `risk-engine.ts` returns `null` until enough `PriceBar` history exists. For new users, the risk row — one of the core moat features — may be invisible for weeks or months.
 
-4. Risk Engine: Avoid Invisible Value
-   Problem: risk-engine.ts returns null until enough PriceBar history exists. For new users, the risk row—one of the core moat features—may be invisible for weeks or months.
+**Action:** Provide synthetic or benchmark-based risk estimates when historical data is insufficient, clearly labeled as estimates. Or offer a "risk preview" using sector-level correlations as a placeholder. Do not let the Pro-tier value proposition remain invisible during the critical early-retention window.
 
-Action: Provide synthetic or benchmark-based risk estimates when historical data is insufficient, clearly labeled as estimates. Or offer a “risk preview” using sector-level correlations as a placeholder. Do not let the Pro-tier value proposition remain invisible during the critical early-retention window.
+### 5. Monetization: Anchor to Outcomes, Not Features
 
-5. Monetization: Anchor to Outcomes, Not Features
-   Current pricing: “~$8–15/month” is a range, not a decision.
+**Current pricing:** "~$8–15/month" is a range, not a decision.
 
-Research finding: Users will pay for outcomes, not features. Subscription fatigue is real.
+**Research finding:** Users will pay for outcomes, not features. Subscription fatigue is real.
 
-Action: Anchor Pro to a single outcome: “Understand your portfolio better than any broker app can explain.” Consider micro-transactions for the debrief (“pay for this report”) as an alternative to subscription. Free tracking, paid intelligence is the right split—but the pricing page must say why it’s worth paying.
+**Action:** Anchor Pro to a single outcome: "Understand your portfolio better than any broker app can explain." Consider micro-transactions for the debrief ("pay for this report") as an alternative to subscription. Free tracking, paid intelligence is the right split — but the pricing page must say why it's worth paying.
 
-6. Shareable Debrief: The Missing Growth Mechanism
-   Research finding: Strava’s success is social proof. Spotify Wrapped is social proof. The AI debrief is Stoxly’s Wrapped.
+### 6. Shareable Debrief: The Missing Growth Mechanism
 
-Action: Design the debrief as a shareable, anonymized artifact. Not a social feed, not followers—but a “portfolio health report” that says “your concentration risk increased 6% this month.” This is a viral growth mechanism that respects the “no social features” boundary.
+**Research finding:** Strava's success is social proof. Spotify Wrapped is social proof. The AI debrief is Stoxly's Wrapped.
 
-7. Crypto Analytics: Unified Ledger, Differentiated Views
-   Problem: Crypto users and stock investors are different personas with different needs. The unified ledger is correct for a portfolio view, but the analytics may need to differ.
+**Action:** Design the debrief as a shareable, anonymized artifact. Not a social feed, not followers — but a "portfolio health report" that says "your concentration risk increased 6% this month." This is a viral growth mechanism that respects the "no social features" boundary.
 
-Action: Keep the append-only ledger for all assets. For analytics, consider asset-class-specific views:
+### 7. Crypto Analytics: Unified Ledger, Differentiated Views
 
-Stocks: beta, Sharpe, sector rotation
+**Problem:** Crypto users and stock investors are different personas with different needs. The unified ledger is correct for a portfolio view, but the analytics may need to differ.
 
-Crypto: volatility, drawdown, correlation to BTC/ETH
+**Action:** Keep the append-only ledger for all assets. For analytics, consider asset-class-specific views:
 
-Both: concentration, correlation matrix
+- Stocks: beta, Sharpe, sector rotation
+- Crypto: volatility, drawdown, correlation to BTC/ETH
+- Both: concentration, correlation matrix
 
-The debrief can say: “Your crypto holdings are 40% of your portfolio and 80% of your risk.”
+The debrief can say: "Your crypto holdings are 40% of your portfolio and 80% of your risk."
 
-8. The Debrief Needs a Follow-Up Affordance
-   Current decision: “AI chatbot—the debrief is not a chat interface; it’s a structured, grounded report.” This is correct for the primary interface.
+### 8. The Debrief Needs a Follow-Up Affordance
 
-Research finding: AI-native products succeed when they allow delegation with verification, not just static reports.
+**Current decision:** "No AI chatbot — the debrief is not a chat interface; it's a structured, grounded report." This is correct for the primary interface.
 
-Action: Add an “ask about this report” affordance that is grounded in the same tool calls. Users will want to drill down: “Why did NVDA contribute 71%?” or “What if I sold 10% of NVDA?” The latter is a simulation, not advice—label it as hypothetical and keep the grounding rule.
+**Research finding:** AI-native products succeed when they allow delegation with verification, not just static reports.
 
-9. Domain Literacy: Explain the Moat in the UI
-   Problem: The three-minute test assumes a financially literate reviewer. Most users—even technical ones—may not know what TWR/MWR means.
+**Action:** Add an "ask about this report" affordance that is grounded in the same tool calls. Users will want to drill down: "Why did NVDA contribute 71%?" or "What if I sold 10% of NVDA?" The latter is a simulation, not advice — label it as hypothetical and keep the grounding rule.
 
-Action: Add one-line explanations next to each metric:
+### 9. Domain Literacy: Explain the Moat in the UI
 
-TWR: “How your strategy performed, ignoring when you added money.”
+**Problem:** The three-minute test assumes a financially literate reviewer. Most users — even technical ones — may not know what TWR/MWR means.
 
-MWR: “How you actually performed, given your deposit timing.”
+**Action:** Add one-line explanations next to each metric:
 
-Don’t assume domain knowledge. Explain the moat, don’t just display it.
+- TWR: "How your strategy performed, ignoring when you added money."
+- MWR: "How you actually performed, given your deposit timing."
 
-10. Boring App Insight: Embrace Reliability Over Excitement
-    Research finding: Boring, reliable, old-fashioned apps survive because they own a recurring, high-stakes workflow. Stoxly’s core workflow—tracking a portfolio—is boring. The AI debrief is the reward.
+Don't assume domain knowledge. Explain the moat, don't just display it.
 
-Action: Keep the dashboard fast, reliable, predictable. Don’t over-animate, over-gamify, or over-design. Users describe boring apps as “I can’t live without it.” That’s the goal.
+### 10. Boring App Insight: Embrace Reliability Over Excitement
 
-11. Revised Build Sequence (Proposed)
-    Based on the above, the recommended order becomes:
+**Research finding:** Boring, reliable, old-fashioned apps survive because they own a recurring, high-stakes workflow. Stoxly's core workflow — tracking a portfolio — is boring. The AI debrief is the reward.
 
-Fix TWR approximation — wire PortfolioSnapshot cron, backfill if possible. This is the correctness prerequisite.
+**Action:** Keep the dashboard fast, reliable, predictable. Don't over-animate, over-gamify, or over-design. Users describe boring apps as "I can't live without it." That's the goal.
 
-Verify demo account against live DB — confirm /dashboard renders real TWR/MWR/holdings.
+### 11. Revised Build Sequence (Proposed)
 
-CSV import — remove onboarding friction for real users.
+Based on the above, the recommended order becomes:
 
-Prototype AI debrief (mock) — pure function, fixture data, validate format and grounding.
+1. **Fix TWR approximation** — wire `PortfolioSnapshot` cron, backfill if possible. This is the correctness prerequisite.
+2. **Verify demo account against live DB** — confirm `/dashboard` renders real TWR/MWR/holdings.
+3. **CSV import** — remove onboarding friction for real users.
+4. **Prototype AI debrief (mock)** — pure function, fixture data, validate format and grounding.
+5. **Risk engine estimates** — provide synthetic/preview risk metrics for new users.
+6. **Billing page** — UI shell, outcome-based messaging.
+7. **Cron wiring** — all sync routes on schedule.
+8. **AI debrief layer** — once `ANTHROPIC_API_KEY` is set.
+9. **Shareable debrief** — anonymized health report as growth mechanism.
+10. **Follow-up sandbox** — grounded "what-if" simulations on the debrief.
 
-Risk engine estimates — provide synthetic/preview risk metrics for new users.
+### 12. Friction Map Applied to Stoxly
 
-Billing page — UI shell, outcome-based messaging.
+| Friction Type | Stoxly's Current State | Risk | Opportunity |
+| --- | --- | --- | --- |
+| Discovery | No public content, no SEO, no community | Invisible to users | Shareable anonymized health report as viral artifact |
+| Onboarding | Manual entry only; demo for reviewers | High — kills consumer adoption | CSV import is the immediate fix |
+| Cognitive | Dashboard has many panels | Moderate — could overwhelm | Progressive disclosure; explain metrics |
+| Interaction | Manual transaction entry | High — tedious | Bulk edit, recurring templates |
+| Information | Fragmented across three providers | Low — handled well | Unified portfolio timeline |
+| Trust | Grounded AI, no buy/sell signals | Low — architecturally sound | Publish eval suite; show grounding validation |
+| Financial | Free tracking, paid intelligence | Moderate — subscription fatigue | Outcome-based pricing; micro-transactions |
+| Social | None (deliberately) | Low — different product | Private benchmarking, shareable report |
+| Retention | Weekly debrief is habit mechanism | Moderate — needs validation | "Significant change" alerts, not engagement pings |
+| AI | Grounded, no hallucination, no chat | Low — architecturally sound | Follow-up sandbox; "explain this metric" |
+| Switching | Data export not mentioned | High — users fear lock-in | Explicit "export your ledger" + data ownership messaging |
 
-Cron wiring — all sync routes on schedule.
+### 13. Cross-Industry Mechanisms for Stoxly
 
-AI debrief layer — once ANTHROPIC_API_KEY is set.
+| Mechanism | Source | Why It Works | Stoxly Application |
+| --- | --- | --- | --- |
+| Streaks | Duolingo | Habit formation | "Weekly debrief streak" for Pro users (not portfolio checking — too manipulative) |
+| Local-first | Obsidian | Data ownership | Export ledger as CSV/JSON; "your data is yours" |
+| Transparency | Robinhood's failure | Trust erosion | Publish eval suite; show grounding validation |
+| Envelope budgeting | YNAB | Constraint-based behavior | "Risk budget" — how much concentration are you willing to accept? |
+| Segments | Strava | Social competition | Private benchmarking against a chosen index |
+| Keyboard-first | Linear | Speed and focus | Power-user shortcuts for transaction entry |
+| Agentic AI | Cursor | Delegation with review | AI suggests "you may have forgotten to log this dividend" |
+| Outcome-based pricing | Education | Pay for results | "Pay for the debrief" micro-transaction |
 
-Shareable debrief — anonymized health report as growth mechanism.
+### 14. Open Questions to Validate
 
-Follow-up sandbox — grounded “what-if” simulations on the debrief.
+- Do users actually want a weekly debrief, or is on-demand better?
+- Is the debrief shareable artifact a growth mechanism or a privacy risk?
+- Will users pay for outcome-based pricing, or do they expect a flat subscription?
+- How long until `PriceBar` history is sufficient for risk analytics? What's the fallback?
+- Does the "no chatbot" decision hold when users want to drill into the debrief?
+- Is the crypto + stock unified ledger actually useful, or do users want separate views?
+- What is the single most important metric that proves the moat in the three-minute test?
 
-12. Friction Map Applied to Stoxly
-    Friction Type Stoxly’s Current State Risk Opportunity
-    Discovery No public content, no SEO, no community Invisible to users Shareable anonymized health report as viral artifact
-    Onboarding Manual entry only; demo for reviewers High—kills consumer adoption CSV import is the immediate fix
-    Cognitive Dashboard has many panels Moderate—could overwhelm Progressive disclosure; explain metrics
-    Interaction Manual transaction entry High—tedious Bulk edit, recurring templates
-    Information Fragmented across three providers Low—handled well Unified portfolio timeline
-    Trust Grounded AI, no buy/sell signals Low—architecturally sound Publish eval suite; show grounding validation
-    Financial Free tracking, paid intelligence Moderate—subscription fatigue Outcome-based pricing; micro-transactions
-    Social None (deliberately) Low—different product Private benchmarking, shareable report
-    Retention Weekly debrief is habit mechanism Moderate—needs validation “Significant change” alerts, not engagement pings
-    AI Grounded, no hallucination, no chat Low—architecturally sound Follow-up sandbox; “explain this metric”
-    Switching Data export not mentioned High—users fear lock-in Explicit “export your ledger” + data ownership messaging
-13. Cross-Industry Mechanisms for Stoxly
-    Mechanism Source Why It Works Stoxly Application
-    Streaks Duolingo Habit formation “Weekly debrief streak” for Pro users (not portfolio checking—too manipulative)
-    Local-first Obsidian Data ownership Export ledger as CSV/JSON; “your data is yours”
-    Transparency Robinhood’s failure Trust erosion Publish eval suite; show grounding validation
-    Envelope budgeting YNAB Constraint-based behavior “Risk budget”—how much concentration are you willing to accept?
-    Segments Strava Social competition Private benchmarking against a chosen index
-    Keyboard-first Linear Speed and focus Power-user shortcuts for transaction entry
-    Agentic AI Cursor Delegation with review AI suggests “you may have forgotten to log this dividend”
-    Outcome-based pricing Education Pay for results “Pay for the debrief” micro-transaction
-14. Open Questions to Validate
-    Do users actually want a weekly debrief, or is on-demand better?
+### 15. Founder Takeaways (Condensed)
 
-Is the debrief shareable artifact a growth mechanism or a privacy risk?
+- Fix TWR before anything else. Correctness is the moat.
+- Move CSV import up. Onboarding friction kills adoption.
+- Prototype the AI debrief now. Don't build the whole product around an unvalidated centerpiece.
+- Provide risk estimates for new users. Invisible value is no value.
+- Anchor pricing to outcomes. "Understand your portfolio" is worth more than a feature list.
+- Design the debrief as shareable. That's the growth mechanism.
+- Explain the moat in the UI. Don't assume domain literacy.
+- Embrace boring reliability. The dashboard is the tool; the debrief is the reward.
+- Publish the eval suite. Trust is built through transparency.
+- Challenge every assumption. The TWR gap is disconfirming evidence for "correct over convenient." The AI debrief's "deliberately last" placement contradicts its "centerpiece" status. Fix these contradictions before they become product failures.
 
-Will users pay for outcome-based pricing, or do they expect a flat subscription?
-
-How long until PriceBar history is sufficient for risk analytics? What’s the fallback?
-
-Does the “no chatbot” decision hold when users want to drill into the debrief?
-
-Is the crypto + stock unified ledger actually useful, or do users want separate views?
-
-What is the single most important metric that proves the moat in the three-minute test?
-
-15. Founder Takeaways (Condensed)
-    Fix TWR before anything else. Correctness is the moat.
-
-Move CSV import up. Onboarding friction kills adoption.
-
-Prototype the AI debrief now. Don’t build the whole product around an unvalidated centerpiece.
-
-Provide risk estimates for new users. Invisible value is no value.
-
-Anchor pricing to outcomes. “Understand your portfolio” is worth more than a feature list.
-
-Design the debrief as shareable. That’s the growth mechanism.
-
-Explain the moat in the UI. Don’t assume domain literacy.
-
-Embrace boring reliability. The dashboard is the tool; the debrief is the reward.
-
-Publish the eval suite. Trust is built through transparency.
-
-Challenge every assumption. The TWR gap is disconfirming evidence for “correct over convenient.” The AI debrief’s “deliberately last” placement contradicts its “centerpiece” status. Fix these contradictions before they become product failures.
-
-This response is AI-generated, for reference only.
+_Note: this addendum section (11–15, and the research synthesis above it) was AI-generated during a product-research pass — kept as reference/open-questions material, not settled architecture._
 
 ## Investment Memory & Decision Intelligence
 
@@ -793,10 +832,15 @@ This longitudinal combination of **objective financial history + personal decisi
 
 The accumulated history should become increasingly useful as more decisions, outcomes, and reflections are recorded. The value is therefore not only in storing individual notes, but in creating a continuously growing **personal investment memory** that can be analyzed over time.
 
+```text
 Journal
 ├── Decisions
 ├── Notes
 ├── Timeline
 ├── Reviews
 └── Investment history
+```
+
+---
+
 _Built by Vahe Ohanyan. © 2026 Stoxly._
