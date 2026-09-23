@@ -8,6 +8,8 @@ type RiskMetrics = {
   volatility: number;
   maxDrawdown: number;
   sharpe: number;
+  sortino: number;
+  calmar: number;
   correlationMatrix: Record<string, Record<string, number>>;
 };
 
@@ -260,6 +262,34 @@ const PortfolioRiskPanel = () => {
             : "Significant historical drawdown",
       barValue: clamp(Math.abs(risk.maxDrawdown) / 0.6, 0, 1) * 100,
       barLabel: "downside",
+    },
+    {
+      label: "Sortino Ratio",
+      value: risk.sortino,
+      formattedValue: formatNumber(risk.sortino),
+      description: "Return per unit of downside risk only",
+      interpretation:
+        risk.sortino >= 1
+          ? "Strong downside-adjusted return"
+          : risk.sortino >= 0
+            ? "Positive downside-adjusted return"
+            : "Negative downside-adjusted return",
+      barValue: getBarWidth(risk.sortino, -1, 3),
+      barLabel: "quality",
+    },
+    {
+      label: "Calmar Ratio",
+      value: risk.calmar,
+      formattedValue: formatNumber(risk.calmar),
+      description: "Return relative to max drawdown",
+      interpretation:
+        risk.calmar >= 1
+          ? "Strong return relative to drawdown"
+          : risk.calmar >= 0
+            ? "Positive but modest recovery profile"
+            : "Losses exceed drawdown-adjusted expectations",
+      barValue: getBarWidth(risk.calmar, -1, 3),
+      barLabel: "recovery",
     },
   ];
 
