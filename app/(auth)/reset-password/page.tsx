@@ -6,6 +6,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { motion, AnimatePresence } from "motion/react";
+import { Classic } from "@/components/loading-ui/classic";
 
 type ResetForm = { password: string; confirm: string };
 
@@ -167,7 +168,14 @@ const ResetPassword = () => (
         transition={{ duration: 0.45, ease: "easeOut" }}
         className="w-full max-w-[400px] rounded-2xl border border-gray-700 bg-gray-800 p-8 flex flex-col gap-7"
       >
-        <Suspense fallback={<p className="text-gray-400 text-sm">Loading…</p>}>
+        <Suspense
+          fallback={
+            <div className="flex flex-col items-center justify-center gap-3 py-8">
+              <Classic className="size-8 text-gray-400" />
+              <p className="text-gray-400 text-sm">Loading…</p>
+            </div>
+          }
+        >
           <ResetPasswordForm />
         </Suspense>
       </motion.div>

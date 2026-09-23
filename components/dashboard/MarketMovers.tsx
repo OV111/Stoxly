@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { TrendingUp, TrendingDown } from "lucide-react";
+import { Classic } from "@/components/loading-ui/classic";
 
 type Mover = {
   symbol: string;
@@ -67,7 +68,8 @@ const MarketMovers = () => {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-[30vh]">
+      <div className="flex flex-col items-center justify-center gap-3 min-h-[30vh]">
+        <Classic className="size-8 text-gray-400" />
         <p className="text-gray-500 text-sm">Loading today&apos;s movers...</p>
       </div>
     );

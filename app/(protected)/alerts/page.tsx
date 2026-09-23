@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { ArrowUp, ArrowDown, X } from "lucide-react";
+import { Classic } from "@/components/loading-ui/classic";
 
 type AlertItem = {
   _id: string;
@@ -140,7 +141,8 @@ const AlertsPage = () => {
       </form>
 
       {loading ? (
-        <div className="flex items-center justify-center min-h-[30vh]">
+        <div className="flex flex-col items-center justify-center gap-3 min-h-[30vh]">
+          <Classic className="size-8 text-gray-400" />
           <p className="text-gray-500 text-lg">Loading alerts...</p>
         </div>
       ) : error ? (

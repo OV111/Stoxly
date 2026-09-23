@@ -5,6 +5,7 @@ import { TrendingUp, TrendingDown, Star, Plus } from "lucide-react";
 import PriceChart from "@/components/stock/PriceChart";
 import AddTransactionModal from "@/components/dashboard/AddTransactionModal";
 import { Button } from "@/components/ui/button";
+import { Classic } from "@/components/loading-ui/classic";
 
 type Quote = {
   symbol: string;
@@ -154,7 +155,8 @@ const StockPage = ({ params }: StockPageProps) => {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-[50vh]">
+      <div className="flex flex-col items-center justify-center gap-3 min-h-[50vh]">
+        <Classic className="size-8 text-gray-400" />
         <p className="text-gray-500 text-lg">Loading {upperSymbol}...</p>
       </div>
     );

@@ -3,6 +3,7 @@
 import { useState, useMemo, useEffect } from "react";
 import SymbolFilterBar from "@/components/news/SymbolFilterBar";
 import NewsCard from "@/components/news/NewsCard";
+import { Classic } from "@/components/loading-ui/classic";
 
 type ApiNewsItem = {
   symbol: string;
@@ -65,7 +66,12 @@ const NewsFeed = () => {
   return (
     <div>
       <SymbolFilterBar symbols={watchlistSymbols} active={activeSymbol} onChange={setActiveSymbol} />
-      {loading && <p className="text-gray-500 text-sm text-center py-12">Loading news...</p>}
+      {loading && (
+        <div className="flex flex-col items-center justify-center gap-3 py-12">
+          <Classic className="size-8 text-gray-400" />
+          <p className="text-gray-500 text-sm">Loading news...</p>
+        </div>
+      )}
       {error && <p className="text-red-500 text-sm text-center py-12">Failed to load news.</p>}
       {!loading && !error && (
         <div className="flex flex-col gap-4">
