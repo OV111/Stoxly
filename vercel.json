@@ -1,0 +1,7 @@
+{
+  "crons": [
+    { "path": "/api/pricebars/sync", "schedule": "0 21 * * 1-5" },
+    { "path": "/api/snapshots/sync", "schedule": "15 21 * * 1-5" },
+    { "path": "/api/alerts/evaluate", "schedule": "30 21 * * 1-5" }
+  ]
+}

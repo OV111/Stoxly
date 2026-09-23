@@ -74,3 +74,32 @@ export async function snapshotPortfolioForUser(
 
   return snapshot;
 }
+
+export type SnapshotAllResult = { userId: string; ok: boolean };
+
+/**
+ * Snapshots every user who has at least one transaction. Sequential, not
+ * Promise.all — each snapshot fans out into a fetchQuotes call, and running
+ * those concurrently across many users would burst past provider rate limits
+ * the same way a parallel syncPriceBarsForSymbols would (see priceBarSync.ts).
+ * One user's failure doesn't stop the rest from being snapshotted.
+ */
+export async function snapshotAllPortfolios(): Promise<SnapshotAllResult[]> {
+  await connectDB();
+
+  const userIds = await Transaction.distinct("userId");
+  const results: SnapshotAllResult[] = [];
+
+  for (const userId of userIds) {
+    const id = userId.toString();
+    try {
+      await snapshotPortfolioForUser(id);
+      results.push({ userId: id, ok: true });
+    } catch (err) {
+      console.error(`[snapshotAllPortfolios] failed for user ${id}`, err);
+      results.push({ userId: id, ok: false });
+    }
+  }
+
+  return results;
+}
