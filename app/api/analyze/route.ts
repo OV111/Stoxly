@@ -11,12 +11,8 @@ import logger from "@/lib/crypto-engine/utils/logger";
 
 const orchestrator = new AnalysisOrchestrator();
 
-export async function POST(
-  req: NextRequest,
-  { params }: { params: { id: string } },
-): Promise<NextResponse> {
-  const { id } = params;
-  const { forceRefresh = false } = await req.json();
+export async function POST(req: NextRequest): Promise<NextResponse> {
+  const { id, forceRefresh = false } = await req.json();
 
   try {
     // 1. Check cache first (unless forceRefresh)

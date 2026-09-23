@@ -2,9 +2,9 @@ import { NextResponse } from "next/server";
 import { connectDB } from "@/lib/mongoose";
 import { getCurrentUser } from "@/lib/getCurrentUser";
 import Transaction from "@/models/Transactions";
-import { buildHoldings } from "@/lib/analytics/holdings-engine";
-import { calculateReturns } from "@/lib/analytics/return-engine";
-import { calculateRiskMetrics } from "@/lib/analytics/risk-engine";
+import { buildHoldings } from "@/lib/analytics/engines/holdings-engine";
+import { calculateReturns } from "@/lib/analytics/engines/return-engine";
+import { calculateRiskMetrics } from "@/lib/analytics/engines/risk-engine";
 import { fetchQuotes } from "@/lib/finnhub";
 
 export async function GET() {
