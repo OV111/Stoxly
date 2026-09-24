@@ -3,10 +3,11 @@
 import Link from "next/link";
 import { TrendingUp, TrendingDown, Menu, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import UserMenu from "@/components/ui/UserMenu";
 import TryDemoButton from "@/components/ui/TryDemoButton";
+import SearchModal from "@/components/search/SearchModal";
 import { navbarItems } from "@/lib/constants";
 import type { CurrentUser } from "@/lib/getCurrentUser";
 
@@ -15,6 +16,20 @@ import { Search } from "lucide-react";
 const LandingNav = ({ user }: { user: CurrentUser | null }) => {
   const [hovered, setHovered] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
+
+  // Cmd/Ctrl+K opens search from anywhere while signed in.
+  useEffect(() => {
+    if (!user) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
+        e.preventDefault();
+        setSearchOpen((open) => !open);
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [user]);
 
   return (
     <nav className="top-0 left-0 right-0 z-50 w-full h-16 flex items-center justify-between px-4 sm:px-6 bg-transparent">
@@ -71,9 +86,14 @@ const LandingNav = ({ user }: { user: CurrentUser | null }) => {
                 </li>
               ))}
             </ul>
-            <Link href="/search" className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setSearchOpen(true)}
+              aria-label="Search"
+              className="cursor-pointer flex items-center gap-2 text-gray-300 hover:text-white transition-colors"
+            >
               <Search className="h-4 w-4" />
-            </Link>
+            </button>
             <UserMenu name={user.name} email={user.email} />
           </>
         ) : (
@@ -157,6 +177,8 @@ const LandingNav = ({ user }: { user: CurrentUser | null }) => {
           </motion.div>
         )}
       </AnimatePresence>
+
+      {user && <SearchModal open={searchOpen} onOpenChange={setSearchOpen} />}
     </nav>
   );
 };
