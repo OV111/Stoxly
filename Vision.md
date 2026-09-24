@@ -146,6 +146,104 @@ Beta against a benchmark, rolling volatility, max drawdown, Sharpe ratio, Sortin
 
 ---
 
+## Primary User
+
+Stoxly is built first for my own real investing. I'm new to investing and
+don't yet have the knowledge to fully understand my portfolio, so I'm
+building a system that explains it to me using correct math. It deals with
+real money, so correctness and trust come before features, growth, or
+monetization. If it genuinely helps me every week, it can help others later.
+
+---
+
+## History — Starting From Zero
+
+Intelligence needs history, and right now Stoxly has almost none:
+`PriceBar` is sparse, `PortfolioSnapshot` is empty (no cron yet), and the
+journal has no real decisions. Most intelligence features (risk metrics,
+behavior patterns, thesis reviews, the debrief) can't work on an empty history.
+
+There are two kinds of history, and they behave differently:
+
+**1. Market history can be backfilled.** Years of price data for any
+stock or crypto already exist (TwelveData, CoinGecko). A backfill job can
+compute beta, volatility, drawdown, and correlation for current holdings
+on day one. This fixes the cold-start problem and the `null` risk row.
+
+**2. Personal history can only be collected, never backfilled.** My
+reasons, expectations, and confidence at the moment of a decision are lost
+forever if I don't record them then — memory rewrites "why did I buy this?"
+within months. This is the most valuable data in Stoxly and the only part
+of the moat that can't be copied.
+
+**Rule:** start accumulating both today. Wire the crons, backfill market
+data, and journal every real decision from now on. Every day without this
+is history lost.
+
+---
+
+## Correctness & Trust
+
+Stoxly handles real money decisions. Target: numbers I can trust enough to
+act on, verified rather than assumed.
+
+- **Broker reconciliation.** My broker is the source of truth. Holdings,
+  cost basis, and realized P&L must match my broker statement exactly.
+  Any mismatch is a bug, fixed before anything else.
+- **Never silently wrong.** Missing, stale, or approximate data is labeled
+  in the UI. Showing "unknown" is better than a confident wrong number.
+- **Known-answer tests.** Every engine (holdings, returns, risk) is tested
+  against cases calculated by hand or in Excel. `risk-engine.ts` included.
+- **Data validation.** Flag price gaps, stale quotes, and abnormal jumps
+  from providers. Perfect math on bad data is still wrong.
+- **Edge cases covered.** Splits, dividends, fees, FX conversion, fully
+  closed positions.
+- **Ledger is sacred.** Transactions are never edited or deleted, only
+  corrected with new entries. Database is backed up regularly.
+- **Security.** Strong auth, secrets never in code, database never
+  publicly exposed.
+- **Stoxly informs, I decide.** Before any real trade, key numbers are
+  double-checked in my broker.
+
+---
+
+## Intelligence Without Prediction
+
+Real intelligence here means seeing things about my own portfolio that I
+can't see myself — not forecasting the market.
+
+- **Financial & political news as context.** Wars, government statements,
+  and earnings news shown alongside price moves, stated as "happened at the
+  same time," never "caused it."
+- **Risk-comfort lens.** I set my own risk comfort; the app shows where I'm
+  above it. Not age-based rules ("you're X, so sell") — that's advice.
+- **Hidden exposure.** Sector concentration and ETF look-through
+  ("you own more Apple than you think").
+- **Historical stress tests.** "If 2022 happened again, this portfolio
+  would lose X%" — a replay of real history, not a prediction.
+- **Currency risk.** AMD/USD exposure and its effect on real value.
+- **Behavior patterns.** From the journal, e.g. "you tend to sell after a
+  10% drop."
+- **Thesis check.** What has happened to the story behind each decision.
+- **Beginner explanations.** Plain-language meaning next to every metric,
+  so the app teaches me while I use it.
+- **Trending assets** can be shown, never framed as "you should buy."
+
+---
+
+## Build Sequence (Revised)
+
+1. Cron wiring (pricebars, snapshots, alerts)
+2. Market history backfill + reconciliation job
+3. Exact TWR (replace the cash-invested approximation)
+4. `risk-engine.ts` refactor + tests; add Sortino and Calmar
+5. Broker reconciliation check
+6. Finish journal end-to-end; start logging real decisions
+7. Metric explanations in the UI
+8. AI debrief (grounded)
+
+**Later:** billing, pricing, shareable reports, rate limiting, growth.
+
 ## HARLF Paper — What Transfers, What Doesn't
 
 _Added 2026-09-22, after reviewing "HARLF: Hierarchical Reinforcement Learning and Lightweight LLM-Driven Sentiment Integration for Financial Portfolio Optimization" (Coriat & Benhamou, IJCAI 2025 FinLLM Workshop)._
@@ -840,6 +938,40 @@ Journal
 ├── Reviews
 └── Investment history
 ```
+
+## Investor-Persona — Vision
+
+_Separate project, documented here for continuity. See "Explicitly not" below — this is not a Stoxly subsystem._
+
+### What this is
+
+A standalone project (separate from Stoxly) to build a fictional expert-investor "mind" — codifying how real expert investors actually reason before making decisions, based on documented principles from investors like Buffett, Munger, and Dalio.
+
+### Why
+
+Most investing mistakes come from unclear or emotional reasoning, not lack of intelligence. This project makes expert-level reasoning explicit, checkable, and reusable — first as a mentor I can consult, later possibly as a fine-tuned model.
+
+### Two layers
+
+1. **Persona Layer** — usable immediately as an AI prompt. Defines the character's identity, core principles (margin of safety, inversion, circle of competence, process-over-outcome, position sizing), and a decision checklist run before any investment call.
+2. **Training-Data Layer** — real case studies, mistakes, and Q&A pairs logged over time. Doubles as future fine-tuning data.
+
+### Build order
+
+1. Define persona identity + principles + checklist (fast, done through writing)
+2. Use it as a working prompt/mentor on real decisions
+3. Log every real reasoning session as a Case Study
+4. Only fine-tune a model once 100+ solid case studies exist — not before
+
+### Success looks like
+
+A consistent, rules-based reasoning process I can trust more than gut feeling — eventually possibly a trained model that reasons the same way automatically.
+
+### Explicitly not
+
+- Not connected to Stoxly (separate folder, separate purpose)
+- Not a trading bot or automated execution
+- Not trained/fine-tuned yet — prompt-only for now
 
 ---
 
