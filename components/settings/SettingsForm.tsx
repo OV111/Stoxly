@@ -15,6 +15,7 @@ type SettingsFormProps = {
 
 type ProfileForm = { name: string };
 type PasswordForm = { currentPassword: string; newPassword: string; confirmPassword: string };
+type SetPasswordForm = { newPassword: string; confirmPassword: string };
 
 const Card = ({ children }: { children: React.ReactNode }) => (
   <div className="rounded-2xl border border-gray-700 bg-gray-800 p-6 flex flex-col gap-4">
@@ -36,6 +37,7 @@ const SettingsForm = ({ name, email, hasPassword, isGoogleLinked, createdAt }: S
 
   const profileForm = useForm<ProfileForm>({ defaultValues: { name } });
   const passwordForm = useForm<PasswordForm>();
+  const setPasswordForm = useForm<SetPasswordForm>();
 
   const onProfileSubmit = async (data: ProfileForm) => {
     setProfileStatus(null);
@@ -75,6 +77,32 @@ const SettingsForm = ({ name, email, hasPassword, isGoogleLinked, createdAt }: S
       }
       setPasswordStatus({ type: "success", message: "Password updated." });
       passwordForm.reset();
+    } catch {
+      setPasswordStatus({ type: "error", message: "Something went wrong. Please try again." });
+    }
+  };
+
+  // Google-created accounts have no password to verify, so this posts to
+  // /set-password (session is the proof) rather than /change-password.
+  const onSetPasswordSubmit = async (data: SetPasswordForm) => {
+    setPasswordStatus(null);
+    try {
+      const res = await fetch("/api/auth/set-password", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ newPassword: data.newPassword }),
+      });
+      const json = await res.json();
+      if (!res.ok) {
+        setPasswordStatus({ type: "error", message: json.message });
+        return;
+      }
+      setPasswordStatus({
+        type: "success",
+        message: "Password set. You can now sign in with your email too.",
+      });
+      setPasswordForm.reset();
+      router.refresh(); // flips hasPassword, swapping this card for the change form
     } catch {
       setPasswordStatus({ type: "error", message: "Something went wrong. Please try again." });
     }
@@ -240,8 +268,73 @@ const SettingsForm = ({ name, email, hasPassword, isGoogleLinked, createdAt }: S
         <Card>
           <h2 className="text-base font-semibold text-white">Password</h2>
           <p className="text-sm text-gray-500">
-            This account signs in with Google, so there&apos;s no password to manage here.
+            You signed up with Google, so this account has no password yet. Set
+            one to also sign in with your email — Google sign-in keeps working
+            either way.
           </p>
+
+          <form
+            onSubmit={setPasswordForm.handleSubmit(onSetPasswordSubmit)}
+            className="flex flex-col gap-3"
+          >
+            <div className="flex flex-col gap-1.5">
+              <label htmlFor="set-new-password" className="text-sm font-medium text-gray-400">
+                New password
+              </label>
+              <input
+                id="set-new-password"
+                {...setPasswordForm.register("newPassword", {
+                  required: "New password is required",
+                  minLength: { value: 8, message: "Min 8 characters" },
+                })}
+                type="password"
+                autoComplete="new-password"
+                className={inputClass}
+              />
+              {setPasswordForm.formState.errors.newPassword && (
+                <p className="text-red-400 text-xs">
+                  {setPasswordForm.formState.errors.newPassword.message}
+                </p>
+              )}
+            </div>
+
+            <div className="flex flex-col gap-1.5">
+              <label htmlFor="set-confirm-password" className="text-sm font-medium text-gray-400">
+                Confirm new password
+              </label>
+              <input
+                id="set-confirm-password"
+                {...setPasswordForm.register("confirmPassword", {
+                  required: "Please confirm your new password",
+                  validate: (v) =>
+                    v === setPasswordForm.watch("newPassword") || "Passwords do not match",
+                })}
+                type="password"
+                autoComplete="new-password"
+                className={inputClass}
+              />
+              {setPasswordForm.formState.errors.confirmPassword && (
+                <p className="text-red-400 text-xs">
+                  {setPasswordForm.formState.errors.confirmPassword.message}
+                </p>
+              )}
+            </div>
+
+            {passwordStatus && (
+              <p className={`text-sm ${passwordStatus.type === "success" ? "text-teal-400" : "text-red-400"}`}>
+                {passwordStatus.message}
+              </p>
+            )}
+
+            <motion.button
+              whileTap={{ scale: 0.98 }}
+              type="submit"
+              disabled={setPasswordForm.formState.isSubmitting}
+              className="self-start h-10 px-4 rounded-lg bg-[#3b82f6] hover:bg-blue-500 text-white font-semibold text-sm transition-colors disabled:opacity-50 cursor-pointer"
+            >
+              {setPasswordForm.formState.isSubmitting ? "Setting..." : "Set password"}
+            </motion.button>
+          </form>
         </Card>
       )}
 
