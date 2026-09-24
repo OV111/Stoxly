@@ -4,11 +4,13 @@ type PanelProps = {
   title: string;
   slot?: string;
   meta?: string;
+  /** Trailing control in the header, e.g. a refresh button. */
+  action?: ReactNode;
   children: ReactNode;
   className?: string;
 };
 
-const Panel = ({ title, slot, meta, children, className = "" }: PanelProps) => {
+const Panel = ({ title, slot, meta, action, children, className = "" }: PanelProps) => {
   return (
     <div className={`bg-gray-900 border border-gray-800 rounded-xl p-5 ${className}`}>
       <div className="flex items-center justify-between mb-4">
@@ -20,7 +22,10 @@ const Panel = ({ title, slot, meta, children, className = "" }: PanelProps) => {
             </span>
           )}
         </div>
-        {meta && <span className="text-[11px] font-mono text-gray-500">{meta}</span>}
+        <div className="flex items-center gap-2">
+          {meta && <span className="text-[11px] font-mono text-gray-500">{meta}</span>}
+          {action}
+        </div>
       </div>
       {children}
     </div>

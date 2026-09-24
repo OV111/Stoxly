@@ -34,6 +34,15 @@ export type Quote = {
   high: number;
   low: number;
   previousClose: number;
+  // Populated only by the CoinGecko path (`fetchCryptoQuotes`), which gets
+  // them in the same bulk /coins/markets response. Finnhub's /quote returns
+  // none of them, so every consumer must treat them as absent for stocks —
+  // they're optional rather than `| null` to keep that distinction visible.
+  marketCap?: number | null;
+  volume?: number | null;
+  sparkline?: number[];
+  high52?: number | null;
+  low52?: number | null;
 };
 
 // lib/finnhub.ts (add these functions)
@@ -247,7 +256,27 @@ export type NewsItem = {
   category: string;
 };
 
-export async function fetchCompanyNews(symbol: string): Promise<NewsItem[]> {
+/**
+ * Per-symbol news, in Finnhub's own shape.
+ *
+ * Deliberately NOT `NewsItem`: that type is the normalized, cross-provider
+ * shape used by the news feed (`fetchNewsForSymbols`, `fetchCryptoNews`),
+ * whereas this passes Finnhub's fields through untouched for the stock detail
+ * page, which renders `headline`/`summary` and formats `datetime` itself.
+ * The function was previously annotated `NewsItem[]` while returning this —
+ * the annotation was wrong, not the data.
+ */
+export type CompanyNewsItem = {
+  symbol: string;
+  source: string;
+  headline: string;
+  summary: string;
+  url: string;
+  /** Unix seconds, as Finnhub returns it. */
+  datetime: number;
+};
+
+export async function fetchCompanyNews(symbol: string): Promise<CompanyNewsItem[]> {
   const to = new Date().toISOString().slice(0, 10);
   const from = new Date(Date.now() - 7 * 86_400_000).toISOString().slice(0, 10);
 

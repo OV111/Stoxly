@@ -112,8 +112,14 @@ const PortfolioPanel = () => {
   }
 
   const isUnrealizedPositive = portfolio.unrealizedPnl >= 0;
-  const hasReturns = portfolio.returns !== null;
-  const hasRisk = portfolio.risk !== null;
+  // Bind the values rather than booleans: `hasReturns = x !== null` doesn't
+  // narrow `portfolio.returns` at the use sites, because a property access can
+  // change between the check and the read as far as the compiler knows. These
+  // consts are the narrowed values themselves, so the JSX below needs no
+  // non-null assertions. Both are legitimately null — returns until there are
+  // transactions, risk until PriceBar has enough history.
+  const returns = portfolio.returns;
+  const risk = portfolio.risk;
 
   return (
     <Panel
@@ -176,7 +182,7 @@ const PortfolioPanel = () => {
             </p>
           </div>
 
-          {hasReturns ? (
+          {returns ? (
             <>
               <div className="grid grid-cols-2 gap-3">
                 <div className="bg-gray-800/60 border border-gray-700 rounded-lg p-3">
@@ -188,11 +194,11 @@ const PortfolioPanel = () => {
                   </div>
                   <p
                     className={`text-lg font-mono font-bold ${
-                      portfolio.returns.twr >= 0 ? "text-teal-400" : "text-red-500"
+                      returns.twr >= 0 ? "text-teal-400" : "text-red-500"
                     }`}
                   >
-                    {portfolio.returns.twr >= 0 ? "+" : ""}
-                    {asPercent(portfolio.returns.twr)}
+                    {returns.twr >= 0 ? "+" : ""}
+                    {asPercent(returns.twr)}
                   </p>
                   <p className="text-[10px] text-gray-500 mt-1 leading-snug">
                     Cash flows neutralized. Approximated at flow boundaries.
@@ -207,11 +213,11 @@ const PortfolioPanel = () => {
                   </div>
                   <p
                     className={`text-lg font-mono font-bold ${
-                      portfolio.returns.mwr >= 0 ? "text-teal-400" : "text-red-500"
+                      returns.mwr >= 0 ? "text-teal-400" : "text-red-500"
                     }`}
                   >
-                    {portfolio.returns.mwr >= 0 ? "+" : ""}
-                    {asPercent(portfolio.returns.mwr)}
+                    {returns.mwr >= 0 ? "+" : ""}
+                    {asPercent(returns.mwr)}
                   </p>
                   <p className="text-[10px] text-gray-500 mt-1 leading-snug">
                     Newton-Raphson, bisection fallback.
@@ -221,8 +227,8 @@ const PortfolioPanel = () => {
 
               <div className="flex items-center justify-between mt-3 pt-3 border-t border-gray-800 text-[11px] font-mono">
                 <span className="text-gray-500">Δ TWR-MWR</span>
-                <span className={Math.abs(portfolio.returns.twr - portfolio.returns.mwr) > 0.05 ? "text-amber-400" : "text-gray-400"}>
-                  {((portfolio.returns.twr - portfolio.returns.mwr) * 100).toFixed(2)} pp
+                <span className={Math.abs(returns.twr - returns.mwr) > 0.05 ? "text-amber-400" : "text-gray-400"}>
+                  {((returns.twr - returns.mwr) * 100).toFixed(2)} pp
                 </span>
               </div>
             </>
@@ -232,49 +238,49 @@ const PortfolioPanel = () => {
             </div>
           )}
 
-          {hasRisk && (
+          {risk && (
             <div className="mt-3 pt-3 border-t border-gray-800">
               <p className="text-[11px] font-semibold text-gray-500 tracking-wide mb-2">RISK</p>
               <div className="grid grid-cols-4 gap-2 text-center">
                 <div>
                   <p className="text-[10px] text-gray-500">BETA</p>
-                  <p className={`text-sm font-mono ${Math.abs(portfolio.risk.beta) > 1.2 ? "text-amber-400" : "text-gray-200"}`}>
-                    {portfolio.risk.beta.toFixed(2)}
+                  <p className={`text-sm font-mono ${Math.abs(risk.beta) > 1.2 ? "text-amber-400" : "text-gray-200"}`}>
+                    {risk.beta.toFixed(2)}
                   </p>
                 </div>
                 <div>
                   <p className="text-[10px] text-gray-500">VOL</p>
-                  <p className={`text-sm font-mono ${portfolio.risk.volatility > 0.3 ? "text-amber-400" : "text-gray-200"}`}>
-                    {asPercent(portfolio.risk.volatility)}
+                  <p className={`text-sm font-mono ${risk.volatility > 0.3 ? "text-amber-400" : "text-gray-200"}`}>
+                    {asPercent(risk.volatility)}
                   </p>
                 </div>
                 <div>
                   <p className="text-[10px] text-gray-500">MAX DD</p>
                   <p className="text-sm font-mono text-red-500">
-                    {asPercent(portfolio.risk.maxDrawdown)}
+                    {asPercent(risk.maxDrawdown)}
                   </p>
                 </div>
                 <div>
                   <p className="text-[10px] text-gray-500">SHARPE</p>
-                  <p className={`text-sm font-mono ${portfolio.risk.sharpe < 0.5 ? "text-amber-400" : "text-gray-200"}`}>
-                    {portfolio.risk.sharpe.toFixed(2)}
+                  <p className={`text-sm font-mono ${risk.sharpe < 0.5 ? "text-amber-400" : "text-gray-200"}`}>
+                    {risk.sharpe.toFixed(2)}
                   </p>
                 </div>
               </div>
 
-              {Object.keys(portfolio.risk.correlationMatrix).length > 1 && (
+              {Object.keys(risk.correlationMatrix).length > 1 && (
                 <div className="mt-3 pt-3 border-t border-gray-800">
                   <p className="text-[10px] text-gray-500 tracking-wide mb-2">CORRELATION MATRIX</p>
                   <div className="overflow-x-auto">
                     <div className="inline-block min-w-full">
-                      <div className="grid gap-0.5" style={{ gridTemplateColumns: `auto repeat(${Object.keys(portfolio.risk.correlationMatrix).length}, minmax(50px, 1fr))` }}>
+                      <div className="grid gap-0.5" style={{ gridTemplateColumns: `auto repeat(${Object.keys(risk.correlationMatrix).length}, minmax(50px, 1fr))` }}>
                         <div className="p-1 text-[10px] text-gray-500 font-medium"></div>
-                        {Object.keys(portfolio.risk.correlationMatrix).map((symbol) => (
+                        {Object.keys(risk.correlationMatrix).map((symbol) => (
                           <div key={symbol} className="p-1 text-[10px] text-gray-500 font-medium text-center truncate">
                             {symbol}
                           </div>
                         ))}
-                        {Object.entries(portfolio.risk.correlationMatrix).map(([rowSymbol, correlations]) => (
+                        {Object.entries(risk.correlationMatrix).map(([rowSymbol, correlations]) => (
                           <>
                             <div key={`label-${rowSymbol}`} className="p-1 text-[10px] text-gray-500 font-medium truncate">
                               {rowSymbol}

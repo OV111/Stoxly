@@ -152,8 +152,11 @@ const PortfolioHistoryPanel = () => {
                 padding: "8px 12px",
               }}
               labelStyle={{ color: "#9ca3af", fontSize: 11 }}
-              formatter={(value: number) => [formatCurrency(value), "Value"]}
-              labelFormatter={(label) => new Date(label).toLocaleDateString()}
+              // Recharts types these as ValueType/NameType (string | number |
+              // array), not the number/string this chart actually plots, so
+              // the values are narrowed here rather than annotated away.
+              formatter={(value) => [formatCurrency(Number(value)), "Value"]}
+              labelFormatter={(label) => new Date(String(label)).toLocaleDateString()}
             />
             <Line
               type="monotone"

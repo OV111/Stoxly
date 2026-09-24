@@ -39,14 +39,10 @@ type CompanyProfile = {
   exchange: string;
 };
 
-type NewsItem = {
-  symbol: string;
-  source: string;
-  headline: string;
-  summary: string;
-  url: string;
-  datetime: number;
-};
+// Imported as a type only, so nothing from the server-side finnhub module is
+// pulled into this client bundle — but the shape now can't drift from what
+// /api/stocks/[symbol] actually sends.
+import type { CompanyNewsItem as NewsItem } from "@/lib/finnhub";
 
 type CandleBar = {
   timestamp: string;

@@ -191,7 +191,7 @@ const AddTransactionModal = ({
               <Select
                 value={form.currency}
                 onValueChange={(value) =>
-                  setForm((f) => ({ ...f, currency: value }))
+                  setForm((f) => ({ ...f, currency: value as Currency }))
                 }
               >
                 <SelectTrigger className="w-full bg-gray-900 border-gray-700 text-gray-100 font-mono text-sm">
