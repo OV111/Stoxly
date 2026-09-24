@@ -36,7 +36,15 @@
     ".next/types/**/*.ts",
     ".next/dev/types/**/*.ts"
   ],
+  // Quarantined: lib/crypto-engine is an asset-scoring subsystem that has
+  // never compiled (it imports a `ModuleResult` type that is defined nowhere)
+  // and that emits bullish/bearish signals, which Vision.md rules out as a
+  // closed design decision. Excluded so the rest of the project typechecks;
+  // the code is kept for a later keep-or-delete call, and nothing reachable
+  // calls it. Delete these entries — or the directories — when that is decided.
   "exclude": [
-    "node_modules"
+    "node_modules",
+    "lib/crypto-engine",
+    "app/api/_quarantined"
   ]
 }

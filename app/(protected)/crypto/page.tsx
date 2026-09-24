@@ -1,7 +1,7 @@
 "use client";
 import { Classic } from "@/components/loading-ui/classic";
 import { useEffect, useState } from "react";
-import { BarChart3, RefreshCw, WalletCards, X, Loader2 } from "lucide-react";
+import { BarChart3, RefreshCw, WalletCards, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import CryptoAssetCard from "@/components/crypto/CryptoAssetCard";
 import { useRef } from "react";
@@ -32,7 +32,6 @@ const CryptoPage = () => {
   );
   const [initialLoading, setInitialLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [analysisLoading, setAnalysisLoading] = useState(false);
   const [visibleCount, setVisibleCount] = useState(BATCH);
   const [error, setError] = useState(false);
   const [cooldownRemaining, setCooldownRemaining] = useState(0);
@@ -78,48 +77,6 @@ const CryptoPage = () => {
   };
 
   // ============================================================
-  // 2. Run analysis for selected assets
-  // ============================================================
-  const runAnalysis = async (assetId: string) => {
-    setAnalysisLoading(true);
-    setAnalysisResult(null);
-
-    try {
-      const response = await fetch(`/api/assets/${assetId}/analyze`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ forceRefresh: false }),
-      });
-
-      const result = await response.json();
-
-      if (response.ok) {
-        setAnalysisResult({
-          status: result.status,
-          analysisId: result.analysisId,
-          data: result.data,
-          message: result.message,
-        });
-        setShowAnalysis(true);
-      } else {
-        setAnalysisResult({
-          status: "error",
-          message: result.message || "Analysis failed",
-        });
-        setShowAnalysis(true);
-      }
-    } catch (error) {
-      setAnalysisResult({
-        status: "error",
-        message: "Failed to connect to analysis service",
-      });
-      setShowAnalysis(true);
-    } finally {
-      setAnalysisLoading(false);
-    }
-  };
-
-  // ============================================================
   // 2b. Tick down the refresh cooldown display
   // ============================================================
   useEffect(() => {
@@ -130,40 +87,6 @@ const CryptoPage = () => {
     }, 1000);
     return () => clearInterval(tick);
   }, [cooldownRemaining]);
-
-  // ============================================================
-  // 3. Poll for analysis status (if processing)
-  // ============================================================
-  useEffect(() => {
-    if (
-      !showAnalysis ||
-      !analysisResult ||
-      analysisResult.status !== "processing"
-    )
-      return;
-
-    const pollInterval = setInterval(async () => {
-      try {
-        const response = await fetch(
-          `/api/assets/${selectedSymbols[0]}/analysis`,
-        );
-        const result = await response.json();
-
-        if (result.exists && result.data) {
-          setAnalysisResult({
-            status: "completed",
-            analysisId: result.data.analysisId,
-            data: result.data,
-          });
-          clearInterval(pollInterval);
-        }
-      } catch (error) {
-        // Continue polling
-      }
-    }, 3000); // Poll every 3 seconds
-
-    return () => clearInterval(pollInterval);
-  }, [showAnalysis, analysisResult, selectedSymbols]);
 
   // ============================================================
   // 4. Load assets on mount
@@ -226,14 +149,13 @@ const CryptoPage = () => {
   };
 
   const handleAnalyzeClick = () => {
-    if (selectedAssets.length === 1) {
-      // Single asset → run full AI analysis
-      runAnalysis(selectedAssets[0].symbol);
-    } else {
-      // Multiple assets → show comparative analysis (existing behavior)
-      setShowAnalysis(true);
-      setAnalysisResult(null);
-    }
+    // Every selection size now takes the grounded live-quote comparison path.
+    // The single-asset branch used to call the lib/crypto-engine scoring
+    // service, which is quarantined (see tsconfig `exclude`) — it emits
+    // bullish/bearish asset scores, which Vision.md rules out as a trading
+    // signal, and it has never compiled.
+    setShowAnalysis(true);
+    setAnalysisResult(null);
   };
 
   if (error && assets.length === 0)
@@ -281,18 +203,12 @@ const CryptoPage = () => {
           </Button>
           <Button
             size="sm"
-            disabled={selectedAssets.length === 0 || analysisLoading}
+            disabled={selectedAssets.length === 0}
             onClick={handleAnalyzeClick}
             className="border border-teal-400/30 bg-teal-400/10 text-teal-400 hover:bg-teal-400/20"
           >
-            {analysisLoading ? (
-              <Loader2 className="size-3.5 animate-spin" />
-            ) : (
-              <BarChart3 className="size-3.5" />
-            )}
-            {analysisLoading
-              ? "Analyzing..."
-              : `Analyze ${selectedAssets.length || ""}`}
+            <BarChart3 className="size-3.5" />
+            {`Compare ${selectedAssets.length || ""}`}
           </Button>
         </div>
       </div>
