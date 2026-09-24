@@ -1,120 +1,89 @@
-"use client";
-
-import { useState } from "react";
-import { TrendingUp, TrendingDown } from "lucide-react";
-import { motion, AnimatePresence } from "motion/react";
 import Link from "next/link";
+import { Logo } from "@/components/ui/Logo";
+import type { CurrentUser } from "@/lib/getCurrentUser";
 
-const Footer = () => {
-  const [hovered, setHovered] = useState(false);
+type FooterLink = { label: string; href: string };
+
+const PRODUCT_LINKS: FooterLink[] = [
+  { label: "Dashboard", href: "/dashboard" },
+  { label: "Watchlist", href: "/watchlist" },
+  { label: "Journal", href: "/journal" },
+  { label: "Intelligence", href: "/intelligence" },
+];
+
+const MARKET_LINKS: FooterLink[] = [
+  { label: "Search Stocks", href: "/search" },
+  { label: "Crypto", href: "/crypto" },
+  { label: "Market News", href: "/news" },
+  { label: "Alerts", href: "/alerts" },
+];
+
+const FooterColumn = ({
+  title,
+  links,
+}: {
+  title: string;
+  links: FooterLink[];
+}) => {
+  const headingId = `footer-${title.toLowerCase()}`;
 
   return (
-    <footer className="w-full border-t mt-0">
+    <nav aria-labelledby={headingId} className="flex flex-col gap-3">
+      <h3
+        id={headingId}
+        className="text-gray-400 font-semibold text-sm uppercase tracking-wider"
+      >
+        {title}
+      </h3>
+      {links.map((link) => (
+        <Link key={link.href} href={link.href} className="footer-link text-sm">
+          {link.label}
+        </Link>
+      ))}
+    </nav>
+  );
+};
+
+const Footer = ({ user }: { user: CurrentUser | null }) => {
+  const accountLinks: FooterLink[] = user
+    ? [
+        { label: "Dashboard", href: "/dashboard" },
+        { label: "Settings", href: "/settings" },
+        { label: "Billing", href: "/billing" },
+      ]
+    : [
+        { label: "Sign In", href: "/sign-in" },
+        { label: "Get Started", href: "/sign-up" },
+      ];
+
+  return (
+    <footer className="w-full border-t border-gray-800">
       <div className="container py-12">
-        <div className="grid grid-cols-1 md:grid-cols-4  gap-10">
-          {/* Brand */}
-          <div className="flex flex-col gap-4">
-            <Link
-              href="/"
-              className="flex items-center gap-2 w-fit"
-              onMouseEnter={() => setHovered(true)}
-              onMouseLeave={() => setHovered(false)}
-            >
-              <div className="relative size-6">
-                <AnimatePresence mode="wait">
-                  {hovered ? (
-                    <motion.span
-                      key="down"
-                      initial={{ opacity: 0, y: -6, rotate: -10 }}
-                      animate={{ opacity: 1, y: 0, rotate: 0 }}
-                      exit={{ opacity: 0, y: 6 }}
-                      transition={{ duration: 0.2 }}
-                      className="absolute inset-0"
-                    >
-                      <TrendingDown className="text-red-500 size-6" />
-                    </motion.span>
-                  ) : (
-                    <motion.span
-                      key="up"
-                      initial={{ opacity: 0, y: 6, rotate: 10 }}
-                      animate={{ opacity: 1, y: 0, rotate: 0 }}
-                      exit={{ opacity: 0, y: -6 }}
-                      transition={{ duration: 0.2 }}
-                      className="absolute inset-0"
-                    >
-                      <TrendingUp className="text-[#3b82f6] size-6" />
-                    </motion.span>
-                  )}
-                </AnimatePresence>
-              </div>
-              <motion.span
-                animate={{ color: hovered ? "#ef4444" : "#ffffff" }}
-                transition={{ duration: 0.2 }}
-                className="font-bold text-xl"
-              >
-                Stoxly
-              </motion.span>
-            </Link>
-            <p className="text-gray-500 text-sm leading-relaxed">
-              Real-time stock tracking, market insights, and smart watchlists —
-              all in one place.
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-x-6 gap-y-10">
+          <div className="col-span-2 md:col-span-1 flex flex-col gap-4">
+            <Logo iconSize="size-6" animateText />
+            <p className="text-gray-600 text-xs leading-relaxed">
+              Stoxly is a portfolio tracking and research tool provided for
+              informational purposes only.
             </p>
           </div>
 
-          {/* Product */}
-          <div className="flex flex-col gap-3">
-            <h4 className="text-gray-400 font-semibold text-sm uppercase tracking-wider">
-              Product
-            </h4>
-            <Link href="/dashboard" className="footer-link text-sm">
-              Dashboard
-            </Link>
-            <Link href="/search" className="footer-link text-sm">
-              Search Stocks
-            </Link>
-            <Link href="/watchlist" className="footer-link text-sm">
-              Watchlist
-            </Link>
-            <Link href="/news" className="footer-link text-sm">
-              Market News
-            </Link>
-          </div>
-
-          {/* Markets */}
-          <div className="flex flex-col gap-3">
-            <h4 className="text-gray-400 font-semibold text-sm uppercase tracking-wider">
-              Markets
-            </h4>
-            <Link href="/dashboard" className="footer-link text-sm">NASDAQ</Link>
-            <Link href="/dashboard" className="footer-link text-sm">NYSE</Link>
-            <Link href="/dashboard" className="footer-link text-sm">S&P 500</Link>
-            <Link href="/crypto" className="footer-link text-sm">Crypto</Link>
-          </div>
-
-          {/* Account */}
-          <div className="flex flex-col gap-3">
-            <h4 className="text-gray-400 font-semibold text-sm uppercase tracking-wider">
-              Account
-            </h4>
-            <Link href="/sign-in" className="footer-link text-sm">
-              Sign In
-            </Link>
-            <Link href="/sign-up" className="footer-link text-sm">
-              Get Started
-            </Link>
-          </div>
+          <FooterColumn title="Product" links={PRODUCT_LINKS} />
+          <FooterColumn title="Markets" links={MARKET_LINKS} />
+          <FooterColumn title="Account" links={accountLinks} />
         </div>
 
-        {/* Bottom bar */}
-        <div className="mt-8 pt-6 flex flex-col sm:flex-row items-center justify-between gap-4">
-          <p className="text-gray-500 text-xs">
-            {`© ${new Date().getFullYear()} Stoxly. All rights reserved.`}
-          </p>
-          <p className="text-gray-600 text-xs">
-            Market data provided by{" "}
-            <span className="text-gray-500">Finnhub</span> &{" "}
-            <span className="text-gray-500">TradingView</span>
-          </p>
+        <div className="mt-10 pt-6 border-t border-gray-800 flex flex-col gap-4">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+            <p className="text-gray-500 text-xs">
+              {`© ${new Date().getFullYear()} Stoxly. All rights reserved.`}
+            </p>
+            <p className="text-gray-600 text-xs">
+              Market data by <span className="text-gray-500">Finnhub</span>,{" "}
+              <span className="text-gray-500">CoinGecko</span> &{" "}
+              <span className="text-gray-500">TradingView</span>
+            </p>
+          </div>
         </div>
       </div>
     </footer>

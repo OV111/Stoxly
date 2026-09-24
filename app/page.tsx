@@ -68,7 +68,7 @@ export default async function Home() {
       <Hero />
       <Features />
       <Summary />
-      <Footer />
+      <Footer user={user} />
     </main>
   );
 }

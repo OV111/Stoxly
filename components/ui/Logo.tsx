@@ -7,9 +7,11 @@ import { motion, AnimatePresence } from "motion/react";
 
 type LogoProps = {
   iconSize?: string;
+  /** Fade the wordmark to red alongside the icon on hover (used in the footer). */
+  animateText?: boolean;
 };
 
-export const Logo = ({ iconSize = "size-5" }: LogoProps) => {
+export const Logo = ({ iconSize = "size-5", animateText = false }: LogoProps) => {
   const [hovered, setHovered] = useState(false);
   return (
     <Link
@@ -45,7 +47,17 @@ export const Logo = ({ iconSize = "size-5" }: LogoProps) => {
           )}
         </AnimatePresence>
       </div>
-      <p className="text-xl font-bold">Stoxly</p>
+      {animateText ? (
+        <motion.span
+          animate={{ color: hovered ? "#ef4444" : "#ffffff" }}
+          transition={{ duration: 0.2 }}
+          className="text-xl font-bold"
+        >
+          Stoxly
+        </motion.span>
+      ) : (
+        <p className="text-xl font-bold">Stoxly</p>
+      )}
     </Link>
   );
 };
