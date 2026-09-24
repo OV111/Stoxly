@@ -3,6 +3,13 @@ import nodemailer from "nodemailer";
 import { connectDB } from "@/lib/mongoose";
 import User from "@/models/User";
 import { NextResponse } from "next/server";
+import { rateLimit, getClientIp } from "@/lib/rate-limit";
+import { normalizeEmail } from "@/lib/email";
+
+// Each allowed request sends real email, so this is throttled per IP to stop
+// the endpoint being used to spam arbitrary inboxes on our SMTP bill.
+const MAX_REQUESTS = 5;
+const WINDOW_MS = 60 * 60 * 1000;
 
 export async function POST(request: Request) {
   try {
@@ -13,7 +20,19 @@ export async function POST(request: Request) {
       return NextResponse.json({ message: "Email is required" }, { status: 400 });
     }
 
-    const user = await User.findOne({ email });
+    const limit = rateLimit(
+      `forgot-password:${getClientIp(request)}`,
+      MAX_REQUESTS,
+      WINDOW_MS,
+    );
+    if (!limit.ok) {
+      return NextResponse.json(
+        { message: "Too many reset requests. Please try again later." },
+        { status: 429, headers: { "Retry-After": String(limit.retryAfter) } },
+      );
+    }
+
+    const user = await User.findOne({ email: normalizeEmail(email) });
 
     // Always return success to avoid user enumeration
     if (!user) {

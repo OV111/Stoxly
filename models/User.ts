@@ -13,7 +13,10 @@ export interface IUser extends Document {
 const UserSchema = new Schema<IUser>(
   {
     name: { type: String, required: true },
-    email: { type: String, required: true, unique: true },
+    // `lowercase`/`trim` run as setters on writes and on query casting, so a
+    // mixed-case address can't be stored or looked up even if a call site
+    // forgets to normalize it first. See lib/email.ts.
+    email: { type: String, required: true, unique: true, lowercase: true, trim: true },
     password: { type: String },
     googleId: { type: String, unique: true, sparse: true },
     resetPasswordToken: { type: String },
