@@ -51,50 +51,26 @@ export type Quote = {
  * Fetch news for stock symbols using Finnhub.
  * Returns an empty array if the API key is missing or the request fails.
  */
+/**
+ * Real per-symbol news, not a generic feed filtered by substring match.
+ * Each symbol goes through fetchCompanyNews (Finnhub primary, Alpha Vantage
+ * fallback, both cached via singleflight), so this is accurate to the
+ * symbol and resilient to either provider being down.
+ */
 export async function fetchNewsForSymbols(symbols: string[]): Promise<NewsItem[]> {
   if (symbols.length === 0) return [];
 
-  const apiKey = process.env.FINNHUB_API_KEY;
-  if (!apiKey) {
-    console.warn('[finnhub] FINNHUB_API_KEY missing – skipping stock news');
-    return [];
-  }
+  const perSymbol = await Promise.all(symbols.map((symbol) => fetchCompanyNews(symbol)));
 
-  try {
-    // Finnhub free tier only supports "general" news, not per-symbol filtering.
-    // We'll filter client-side.
-    const response = await fetch(
-      `https://finnhub.io/api/v1/news?category=general&token=${apiKey}`,
-      { next: { revalidate: 300 }, signal: AbortSignal.timeout(5000) }
-    );
-
-    if (!response.ok) {
-      console.error(`[finnhub] news request failed: ${response.status}`);
-      return [];
-    }
-
-    const data = await response.json();
-    if (!Array.isArray(data)) return [];
-
-    // Filter by symbols (case-insensitive)
-    const filtered = data.filter((item: any) => {
-      const text = (item.headline || '') + ' ' + (item.summary || '');
-      return symbols.some(sym => text.toUpperCase().includes(sym.toUpperCase()));
-    });
-
-    return filtered.map((item: any) => ({
-      id: `finnhub-${item.id || item.datetime}`,
-      title: item.headline || 'No title',
-      description: item.summary || '',
-      source: item.source || 'Finnhub',
-      publishedAt: new Date(item.datetime * 1000).toISOString(),
-      url: item.url || '#',
-      category: item.category || 'general',
-    }));
-  } catch (err) {
-    console.error('[finnhub] failed to fetch news:', err);
-    return [];
-  }
+  return perSymbol.flat().map((item) => ({
+    id: `${item.symbol}-${item.datetime}-${item.url}`,
+    title: item.headline || "No title",
+    description: item.summary || "",
+    source: item.source || "Unknown",
+    publishedAt: new Date(item.datetime * 1000).toISOString(),
+    url: item.url || "#",
+    category: item.symbol,
+  }));
 }
 
 /**
@@ -207,15 +183,28 @@ export async function fetchQuote(symbol: string): Promise<Quote | null> {
     return (await fetchCryptoQuotes([symbol]))[0] ?? null;
   }
 
+  const fromFinnhub = await fetchQuoteFromFinnhub(symbol);
+  if (fromFinnhub) return fromFinnhub;
+
+  const { fetchQuoteFromAlphaVantage } = await import("@/lib/alphavantage");
+  return fetchQuoteFromAlphaVantage(symbol);
+}
+
+async function fetchQuoteFromFinnhub(symbol: string): Promise<Quote | null> {
+  const apiKey = process.env.FINNHUB_API_KEY;
+  if (!apiKey) return null; // Missing key — fail fast, let the caller fall back.
+
   return singleflight(`quote:${symbol}`, async () => {
     try {
       const response = await fetch(
-        `https://finnhub.io/api/v1/quote?symbol=${symbol}&token=${process.env.FINNHUB_API_KEY}`,
-        { next: { revalidate: TTL.QUOTE } },
+        `https://finnhub.io/api/v1/quote?symbol=${symbol}&token=${apiKey}`,
+        { next: { revalidate: TTL.QUOTE }, signal: AbortSignal.timeout(8_000) },
       );
       if (!response.ok) return null;
 
       const data = await response.json();
+      if (!data || data.c === 0) return null; // Finnhub returns all-zero for an unrecognized/no-data symbol.
+
       return {
         symbol,
         price: data.c,
@@ -227,7 +216,92 @@ export async function fetchQuote(symbol: string): Promise<Quote | null> {
         previousClose: data.pc,
       };
     } catch (err) {
-      console.error(`Failed to fetch quote for ${symbol}:`, err);
+      console.error(`Failed to fetch quote for ${symbol} from Finnhub:`, err);
+      return null;
+    }
+  });
+}
+
+export type MarketStatus = {
+  isOpen: boolean;
+  session: "pre-market" | "regular" | "post-market" | "closed";
+  timezone: string;
+  timestamp: number; // unix seconds, from Finnhub — the "as of" time
+};
+
+/**
+ * Real exchange session state from Finnhub, not derived client-side, so it
+ * correctly accounts for market holidays.
+ */
+export async function fetchMarketStatus(exchange = "US"): Promise<MarketStatus | null> {
+  const fromFinnhub = await fetchMarketStatusFromFinnhub(exchange);
+  if (fromFinnhub) return fromFinnhub;
+  return exchange === "US" ? usMarketStatusFromClock() : null;
+}
+
+/** Clock-based fallback. Doesn't know exchange holidays — Finnhub does. */
+function usMarketStatusFromClock(): MarketStatus {
+  const timezone = "America/New_York";
+  const now = new Date();
+  const parts = Object.fromEntries(
+    new Intl.DateTimeFormat("en-US", {
+      timeZone: timezone,
+      weekday: "short",
+      hour: "2-digit",
+      minute: "2-digit",
+      hourCycle: "h23",
+    })
+      .formatToParts(now)
+      .map((p) => [p.type, p.value]),
+  );
+  const minutes = Number(parts.hour) * 60 + Number(parts.minute);
+  const weekend = parts.weekday === "Sat" || parts.weekday === "Sun";
+
+  const session: MarketStatus["session"] = weekend
+    ? "closed"
+    : minutes >= 570 && minutes < 960
+      ? "regular"
+      : minutes >= 240 && minutes < 570
+        ? "pre-market"
+        : minutes >= 960 && minutes < 1200
+          ? "post-market"
+          : "closed";
+
+  return {
+    isOpen: session === "regular",
+    session,
+    timezone,
+    timestamp: Math.floor(now.getTime() / 1000),
+  };
+}
+
+async function fetchMarketStatusFromFinnhub(exchange: string): Promise<MarketStatus | null> {
+  const apiKey = process.env.FINNHUB_API_KEY;
+  if (!apiKey) return null;
+
+  return singleflight(`market-status:${exchange}`, async () => {
+    try {
+      const response = await fetch(
+        `https://finnhub.io/api/v1/stock/market-status?exchange=${exchange}&token=${apiKey}`,
+        { next: { revalidate: TTL.MARKET_STATUS }, signal: AbortSignal.timeout(8_000) },
+      );
+      if (!response.ok) return null;
+
+      const data = await response.json();
+      const session: MarketStatus["session"] = data.isOpen
+        ? "regular"
+        : data.session === "pre-market" || data.session === "post-market"
+          ? data.session
+          : "closed";
+
+      return {
+        isOpen: Boolean(data.isOpen),
+        session,
+        timezone: data.timezone ?? "America/New_York",
+        timestamp: data.t,
+      };
+    } catch (err) {
+      console.error(`Failed to fetch market status for ${exchange}:`, err);
       return null;
     }
   });
@@ -277,6 +351,17 @@ export type CompanyNewsItem = {
 };
 
 export async function fetchCompanyNews(symbol: string): Promise<CompanyNewsItem[]> {
+  const fromFinnhub = await fetchCompanyNewsFromFinnhub(symbol);
+  if (fromFinnhub.length > 0) return fromFinnhub;
+
+  const { fetchNewsFromAlphaVantage } = await import("@/lib/alphavantage");
+  return fetchNewsFromAlphaVantage(symbol);
+}
+
+async function fetchCompanyNewsFromFinnhub(symbol: string): Promise<CompanyNewsItem[]> {
+  const apiKey = process.env.FINNHUB_API_KEY;
+  if (!apiKey) return [];
+
   const to = new Date().toISOString().slice(0, 10);
   const from = new Date(Date.now() - 7 * 86_400_000).toISOString().slice(0, 10);
 
@@ -284,8 +369,8 @@ export async function fetchCompanyNews(symbol: string): Promise<CompanyNewsItem[
   return singleflight(`news:${symbol}:${from}:${to}`, async () => {
     try {
       const response = await fetch(
-        `https://finnhub.io/api/v1/company-news?symbol=${symbol}&from=${from}&to=${to}&token=${process.env.FINNHUB_API_KEY}`,
-        { next: { revalidate: TTL.NEWS } },
+        `https://finnhub.io/api/v1/company-news?symbol=${symbol}&from=${from}&to=${to}&token=${apiKey}`,
+        { next: { revalidate: TTL.NEWS }, signal: AbortSignal.timeout(8_000) },
       );
       if (!response.ok) return [];
 
@@ -301,7 +386,7 @@ export async function fetchCompanyNews(symbol: string): Promise<CompanyNewsItem[
         datetime: item.datetime,
       }));
     } catch (err) {
-      console.error(`Failed to fetch news for ${symbol}:`, err);
+      console.error(`Failed to fetch news for ${symbol} from Finnhub:`, err);
       return [];
     }
   });
@@ -355,11 +440,22 @@ export type CompanyProfile = {
 };
 
 export async function fetchCompanyProfile(symbol: string): Promise<CompanyProfile | null> {
+  const fromFinnhub = await fetchProfileFromFinnhub(symbol);
+  if (fromFinnhub) return fromFinnhub;
+
+  const { fetchProfileFromAlphaVantage } = await import("@/lib/alphavantage");
+  return fetchProfileFromAlphaVantage(symbol);
+}
+
+async function fetchProfileFromFinnhub(symbol: string): Promise<CompanyProfile | null> {
+  const apiKey = process.env.FINNHUB_API_KEY;
+  if (!apiKey) return null;
+
   return singleflight(`profile:${symbol}`, async () => {
     try {
       const response = await fetch(
-        `https://finnhub.io/api/v1/stock/profile2?symbol=${symbol}&token=${process.env.FINNHUB_API_KEY}`,
-        { next: { revalidate: TTL.PROFILE } },
+        `https://finnhub.io/api/v1/stock/profile2?symbol=${symbol}&token=${apiKey}`,
+        { next: { revalidate: TTL.PROFILE }, signal: AbortSignal.timeout(8_000) },
       );
       if (!response.ok) return null;
 
@@ -376,7 +472,7 @@ export async function fetchCompanyProfile(symbol: string): Promise<CompanyProfil
         exchange: data.exchange,
       };
     } catch (err) {
-      console.error(`Failed to fetch company profile for ${symbol}:`, err);
+      console.error(`Failed to fetch company profile for ${symbol} from Finnhub:`, err);
       return null;
     }
   });
@@ -403,6 +499,9 @@ export async function fetchDailyCandles(
   fromUnix: number,
   toUnix: number,
 ): Promise<CandleBar[] | null> {
+  const apiKey = process.env.FINNHUB_API_KEY;
+  if (!apiKey) return null;
+
   // Bucket the range to the day. Callers derive `toUnix` from Date.now(), so a
   // raw-seconds key would be unique on every call and never hit cache.
   const fromDay = Math.floor(fromUnix / 86_400);
@@ -411,8 +510,8 @@ export async function fetchDailyCandles(
   return singleflight(`candle:${symbol}:${fromDay}:${toDay}`, async () => {
     try {
       const response = await fetch(
-        `https://finnhub.io/api/v1/stock/candle?symbol=${symbol}&resolution=D&from=${fromUnix}&to=${toUnix}&token=${process.env.FINNHUB_API_KEY}`,
-        { next: { revalidate: TTL.CANDLE } },
+        `https://finnhub.io/api/v1/stock/candle?symbol=${symbol}&resolution=D&from=${fromUnix}&to=${toUnix}&token=${apiKey}`,
+        { next: { revalidate: TTL.CANDLE }, signal: AbortSignal.timeout(8_000) },
       );
       if (!response.ok) {
         console.error(`[finnhub:candle] ${symbol} request failed: ${response.status}`);

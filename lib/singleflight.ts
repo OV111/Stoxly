@@ -45,4 +45,5 @@ export const TTL = {
   CANDLE: 3_600, // 1h — closed daily bars are immutable; only today's moves
   EDGAR_TICKER_MAP: 86_400, // 24h — ~10k tickers, changes rarely
   EDGAR_FILINGS: 3_600, // 1h — new filings trickle in, not tick-level
+  MARKET_STATUS: 30, // seconds — needs to flip promptly at open/close
 } as const;

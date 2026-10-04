@@ -4,6 +4,7 @@ import { getCurrentUser } from "@/lib/getCurrentUser";
 import { Watchlist } from "@/lib/watchlist/model";
 import Transaction from "@/models/Transactions";
 import { fetchNewsForSymbols, fetchCryptoNews } from "@/lib/finnhub";
+import { CRYPTO_ASSETS } from "@/constants/cryptoAssets";
 
 export async function GET() {
   try {
@@ -17,9 +18,15 @@ export async function GET() {
     // ✅ FIXED: schema is one-doc-per-symbol, not a single doc with symbols[]
     const watchlistDocs = await Watchlist.find(
       { userId: user.id },
-      { symbol: 1, _id: 0 }
+      { symbol: 1, type: 1, _id: 0 }
     ).lean();
-    const watchlistSymbols = watchlistDocs.map((d) => d.symbol);
+    // Watchlist crypto may be stored as a bare ticker ("BTC"); normalize so it
+    // never goes down the stock-news path.
+    const watchlistSymbols = watchlistDocs.map((d) => {
+      if (d.type !== "crypto" || d.symbol.startsWith("CRYPTO:")) return d.symbol;
+      const asset = CRYPTO_ASSETS.find((a) => a.ticker === d.symbol.toUpperCase());
+      return asset ? asset.symbol : `CRYPTO:${d.symbol.toLowerCase()}`;
+    });
 
     // Portfolio holdings
     const transactions = await Transaction.find({ userId: user.id });
@@ -39,7 +46,7 @@ export async function GET() {
         {
           status: 200,
           headers: {
-            "Cache-Control": "public, s-maxage=60, stale-while-revalidate=300",
+            "Cache-Control": "private, max-age=60",
           },
         },
       );
@@ -76,7 +83,7 @@ export async function GET() {
       {
         status: 200,
         headers: {
-          "Cache-Control": "public, s-maxage=60, stale-while-revalidate=300",
+          "Cache-Control": "private, max-age=60",
         },
       },
     );

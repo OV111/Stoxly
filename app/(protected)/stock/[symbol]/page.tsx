@@ -3,9 +3,43 @@
 import { use, useEffect, useState } from "react";
 import { TrendingUp, TrendingDown, Star, Plus } from "lucide-react";
 import PriceChart from "@/components/stock/PriceChart";
+import StockTabs, { StockTabId, STOCK_TAB_LABELS } from "@/components/stock/StockTabs";
+import ComingSoonPanel from "@/components/stock/ComingSoonPanel";
+import SentimentPanel from "@/components/stock/SentimentPanel";
 import AddTransactionModal from "@/components/dashboard/AddTransactionModal";
 import { Button } from "@/components/ui/button";
 import { Classic } from "@/components/loading-ui/classic";
+
+type MarketStatus = {
+  isOpen: boolean;
+  session: "pre-market" | "regular" | "post-market" | "closed";
+  timezone: string;
+  timestamp: number;
+};
+
+const SESSION_LABEL: Record<MarketStatus["session"], string> = {
+  regular: "Market open",
+  "pre-market": "Pre-market",
+  "post-market": "After hours",
+  closed: "Market closed",
+};
+
+const formatAsOf = (unixSeconds: number, timezone: string) => {
+  const date = new Date(unixSeconds * 1000);
+  const time = date.toLocaleTimeString("en-US", {
+    hour: "numeric",
+    minute: "2-digit",
+    timeZone: timezone,
+  });
+  // Short offset like "GMT+4" for the given IANA zone, at this instant.
+  const offset = new Intl.DateTimeFormat("en-US", {
+    timeZone: timezone,
+    timeZoneName: "shortOffset",
+  })
+    .formatToParts(date)
+    .find((p) => p.type === "timeZoneName")?.value;
+  return `As of today at ${time}${offset ? ` ${offset}` : ""}`;
+};
 
 type Quote = {
   symbol: string;
@@ -67,6 +101,7 @@ type StockData = {
   news: NewsItem[];
   candles: CandleBar[] | null;
   insiderFilings: InsiderFiling[];
+  marketStatus: MarketStatus | null;
 };
 
 const timeAgo = (unixSeconds: number) => {
@@ -102,6 +137,7 @@ const StockPage = ({ params }: StockPageProps) => {
   const [holding, setHolding] = useState<Holding | null>(null);
   const [isWatchlisted, setIsWatchlisted] = useState<boolean | null>(null); // null = still checking
   const [watchlistBusy, setWatchlistBusy] = useState(false);
+  const [activeTab, setActiveTab] = useState<StockTabId>("overview");
 
   useEffect(() => {
     fetch(`/api/stocks/${upperSymbol}`)
@@ -124,7 +160,8 @@ const StockPage = ({ params }: StockPageProps) => {
     fetch("/api/watchlist")
       .then((r) => r.json())
       .then((json) => {
-        setIsWatchlisted(Array.isArray(json) && json.some((q: Quote) => q.symbol === upperSymbol));
+        const items = Array.isArray(json?.items) ? json.items : [];
+        setIsWatchlisted(items.some((q: { symbol: string }) => q.symbol === upperSymbol));
       })
       .catch(() => setIsWatchlisted(false));
   }, [upperSymbol]);
@@ -166,7 +203,7 @@ const StockPage = ({ params }: StockPageProps) => {
     );
   }
 
-  const { quote, profile, news, candles, insiderFilings } = data;
+  const { quote, profile, news, candles, insiderFilings, marketStatus } = data;
   const isPositive = quote.changePercent >= 0;
   const hasChart = Array.isArray(candles) && candles.length > 0;
 
@@ -193,8 +230,23 @@ const StockPage = ({ params }: StockPageProps) => {
                   {upperSymbol}
                 </span>
               </div>
-              {profile?.exchange && (
-                <p className="text-gray-500 mt-1 text-sm">{profile.exchange}</p>
+              {(profile?.exchange || marketStatus) && (
+                <div className="flex items-center gap-2 mt-1 text-sm">
+                  {profile?.exchange && <span className="text-gray-500">{profile.exchange}</span>}
+                  {profile?.exchange && marketStatus && <span className="text-gray-700">·</span>}
+                  {marketStatus && (
+                    <span className="flex items-center gap-1.5">
+                      <span
+                        className={`size-1.5 rounded-full ${
+                          marketStatus.isOpen ? "bg-teal-400" : "bg-gray-500"
+                        }`}
+                      />
+                      <span className={marketStatus.isOpen ? "text-teal-400" : "text-gray-500"}>
+                        {SESSION_LABEL[marketStatus.session]}
+                      </span>
+                    </span>
+                  )}
+                </div>
               )}
             </div>
           </div>
@@ -247,6 +299,11 @@ const StockPage = ({ params }: StockPageProps) => {
               {quote.change?.toFixed(2)} ({isPositive ? "+" : ""}
               {quote.changePercent?.toFixed(2)}%)
               </div>
+              {marketStatus && (
+                <p className="text-xs text-gray-600 mt-1.5">
+                  {formatAsOf(marketStatus.timestamp, marketStatus.timezone)}
+                </p>
+              )}
             </div>
           </div>
         </div>
@@ -297,6 +354,10 @@ const StockPage = ({ params }: StockPageProps) => {
         </div>
       </div>
 
+      <StockTabs active={activeTab} onChange={setActiveTab} />
+
+      {activeTab === "overview" && (
+      <>
       {/* Your Position — connects this page to the user's own ledger, the
           thing a generic quote page can't do */}
       <div className="bg-gray-800 border border-gray-600 rounded-xl p-6">
@@ -408,8 +469,10 @@ const StockPage = ({ params }: StockPageProps) => {
           </div>
         </div>
       )}
+      </>
+      )}
 
-      {/* News */}
+      {activeTab === "news" && (
       <div className="bg-gray-800 border border-gray-600 rounded-xl p-6">
         <h2 className="text-sm font-semibold text-gray-400 uppercase tracking-wide mb-4">News</h2>
         {news.length === 0 ? (
@@ -437,6 +500,15 @@ const StockPage = ({ params }: StockPageProps) => {
           </div>
         )}
       </div>
+      )}
+
+      {activeTab === "sentiment" && <SentimentPanel symbol={upperSymbol} />}
+
+      {activeTab !== "overview" &&
+        activeTab !== "news" &&
+        activeTab !== "sentiment" && (
+        <ComingSoonPanel label={STOCK_TAB_LABELS[activeTab]} />
+      )}
     </div>
   );
 };

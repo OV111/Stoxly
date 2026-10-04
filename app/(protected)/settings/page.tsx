@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/getCurrentUser";
 import SettingsForm from "@/components/settings/SettingsForm";
+import ExchangeConnections from "@/components/settings/ExchangeConnections";
 
 const SettingsPage = async () => {
   const user = await getCurrentUser();
@@ -23,6 +24,8 @@ const SettingsPage = async () => {
           isGoogleLinked={user.isGoogleLinked}
           createdAt={user.createdAt.toISOString()}
         />
+
+        <ExchangeConnections />
       </div>
     </div>
   );
