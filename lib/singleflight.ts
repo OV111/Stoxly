@@ -46,4 +46,11 @@ export const TTL = {
   EDGAR_TICKER_MAP: 86_400, // 24h — ~10k tickers, changes rarely
   EDGAR_FILINGS: 3_600, // 1h — new filings trickle in, not tick-level
   MARKET_STATUS: 30, // seconds — needs to flip promptly at open/close
+  FUNDAMENTALS: 21_600, // 6h — statements only change when a 10-Q/10-K lands
+  HISTORY: 3_600, // 1h — long daily series for technicals/seasonals
+  ESTIMATES: 3_600, // 1h — analyst estimates revise intraday at most
+  OWNERSHIP: 43_200, // 12h — 13F holdings are quarterly
+  OPTIONS: 60, // 1 min — chains reprice through the session
+  ETF_HOLDINGS: 86_400, // 24h — top-10 constituents barely move day to day
+  TICKER: 60, // 1 min — landing-page tape; decorative, not trading data
 } as const;

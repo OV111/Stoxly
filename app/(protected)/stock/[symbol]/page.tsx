@@ -3,9 +3,17 @@
 import { use, useEffect, useState } from "react";
 import { TrendingUp, TrendingDown, Star, Plus } from "lucide-react";
 import PriceChart from "@/components/stock/PriceChart";
-import StockTabs, { StockTabId, STOCK_TAB_LABELS } from "@/components/stock/StockTabs";
-import ComingSoonPanel from "@/components/stock/ComingSoonPanel";
+import StockTabs, { StockTabId, STOCK_TAB_LABELS, tabPanelId } from "@/components/stock/StockTabs";
 import SentimentPanel from "@/components/stock/SentimentPanel";
+import FinancialsPanel from "@/components/stock/tabs/FinancialsPanel";
+import DocumentsPanel from "@/components/stock/tabs/DocumentsPanel";
+import OwnershipPanel from "@/components/stock/tabs/OwnershipPanel";
+import TechnicalsPanel from "@/components/stock/tabs/TechnicalsPanel";
+import ForecastsPanel from "@/components/stock/tabs/ForecastsPanel";
+import SeasonalsPanel from "@/components/stock/tabs/SeasonalsPanel";
+import OptionsPanel from "@/components/stock/tabs/OptionsPanel";
+import EtfsPanel from "@/components/stock/tabs/EtfsPanel";
+import { isCryptoSymbol } from "@/constants/cryptoAssets";
 import AddTransactionModal from "@/components/dashboard/AddTransactionModal";
 import { Button } from "@/components/ui/button";
 import { Classic } from "@/components/loading-ui/classic";
@@ -138,6 +146,23 @@ const StockPage = ({ params }: StockPageProps) => {
   const [isWatchlisted, setIsWatchlisted] = useState<boolean | null>(null); // null = still checking
   const [watchlistBusy, setWatchlistBusy] = useState(false);
   const [activeTab, setActiveTab] = useState<StockTabId>("overview");
+  const isCrypto = isCryptoSymbol(upperSymbol);
+
+  // The active tab lives in ?tab= so a tab view can be linked and survives a
+  // refresh. Read via window rather than useSearchParams to avoid forcing a
+  // Suspense boundary around the whole page.
+  useEffect(() => {
+    const requested = new URLSearchParams(window.location.search).get("tab");
+    if (requested && requested in STOCK_TAB_LABELS) setActiveTab(requested as StockTabId);
+  }, []);
+
+  const selectTab = (tab: StockTabId) => {
+    setActiveTab(tab);
+    const url = new URL(window.location.href);
+    if (tab === "overview") url.searchParams.delete("tab");
+    else url.searchParams.set("tab", tab);
+    window.history.replaceState(null, "", url);
+  };
 
   useEffect(() => {
     fetch(`/api/stocks/${upperSymbol}`)
@@ -354,8 +379,14 @@ const StockPage = ({ params }: StockPageProps) => {
         </div>
       </div>
 
-      <StockTabs active={activeTab} onChange={setActiveTab} />
+      <StockTabs active={activeTab} onChange={selectTab} isCrypto={isCrypto} />
 
+      <div
+        role="tabpanel"
+        id={tabPanelId(activeTab)}
+        aria-labelledby={`stock-tab-${activeTab}`}
+        className="space-y-8"
+      >
       {activeTab === "overview" && (
       <>
       {/* Your Position — connects this page to the user's own ledger, the
@@ -503,12 +534,15 @@ const StockPage = ({ params }: StockPageProps) => {
       )}
 
       {activeTab === "sentiment" && <SentimentPanel symbol={upperSymbol} />}
-
-      {activeTab !== "overview" &&
-        activeTab !== "news" &&
-        activeTab !== "sentiment" && (
-        <ComingSoonPanel label={STOCK_TAB_LABELS[activeTab]} />
-      )}
+      {activeTab === "financials" && <FinancialsPanel symbol={upperSymbol} />}
+      {activeTab === "documents" && <DocumentsPanel symbol={upperSymbol} />}
+      {activeTab === "ownership" && <OwnershipPanel symbol={upperSymbol} />}
+      {activeTab === "technicals" && <TechnicalsPanel symbol={upperSymbol} />}
+      {activeTab === "forecasts" && <ForecastsPanel symbol={upperSymbol} />}
+      {activeTab === "seasonals" && <SeasonalsPanel symbol={upperSymbol} />}
+      {activeTab === "options" && <OptionsPanel symbol={upperSymbol} />}
+      {activeTab === "etfs" && <EtfsPanel symbol={upperSymbol} />}
+      </div>
     </div>
   );
 };
