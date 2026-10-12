@@ -65,7 +65,7 @@ export default async function Home() {
       </div>
 
       <LandingNav user={user} />
-      <Hero />
+      <Hero signedIn={!!user} />
       <Features />
       <Summary />
       <Footer user={user} />

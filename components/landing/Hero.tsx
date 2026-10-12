@@ -1,107 +1,117 @@
 "use client";
 
-import { useEffect, useRef } from "react";
-import {
-  useMotionValue,
-  useTransform,
-  useInView,
-  animate,
-  motion,
-} from "framer-motion";
-import TrueFocus from "@/components/TrueFocus";
-import LogoLoop from "@/components/LogoLoop";
-import GradientText from "@/components/GradientText";
-import { companies } from "@/components/landing/companies";
+import Link from "next/link";
+import { ArrowRight } from "lucide-react";
+import { motion, useReducedMotion } from "framer-motion";
+import { Button } from "@/components/ui/button";
+import TryDemoButton from "@/components/ui/TryDemoButton";
+import HeroPreview from "@/components/landing/HeroPreview";
+import TickerTape from "@/components/landing/TickerTape";
 
-const CountUp = ({
-  target,
-  suffix = "+",
-}: {
-  target: number;
-  suffix?: string;
-}) => {
-  const ref = useRef<HTMLSpanElement>(null);
-  const isInView = useInView(ref, { once: true });
-  const count = useMotionValue(0);
-  const formatted = useTransform(count, (v) =>
-    target >= 1000000
-      ? `${Math.round(v / 1000000)}M${suffix}`
-      : `${Math.floor(v)}${suffix}`,
-  );
+const Hero = ({ signedIn }: { signedIn: boolean }) => {
+  const reduceMotion = useReducedMotion();
 
-  useEffect(() => {
-    if (!isInView) return;
-    const controls = animate(count, target, { duration: 2, ease: "easeOut" });
-    return () => controls.stop();
-  }, [isInView, target]);
+  // One gentle entrance, staggered; skipped entirely for reduced motion.
+  const fadeUp = (delay: number) =>
+    reduceMotion
+      ? {}
+      : {
+          initial: { opacity: 0, y: 16 },
+          animate: { opacity: 1, y: 0 },
+          transition: { duration: 0.6, delay, ease: [0.22, 1, 0.36, 1] as const },
+        };
 
-  return <motion.span ref={ref}>{formatted}</motion.span>;
-};
-
-const Hero = () => {
   return (
-    <section className="relative flex flex-col items-center text-center px-6 h-[calc(100dvh-4rem)] overflow-hidden">
-      <div className="flex flex-1 pb-20 flex-col items-center justify-center gap-8 sm:gap-10 min-h-0">
-        <h1 className="flex flex-col items-center gap-3">
-          <GradientText
-            colors={["#ffffff", "#3b82f6", "#60a5fa", "#ffffff"]}
-            animationSpeed={6}
-            className="text-4xl sm:text-5xl md:text-6xl lg:text-[78px] font-bold w-full"
+    <section className="relative flex min-h-[calc(100dvh-4rem)] flex-col overflow-hidden">
+      <div className="container flex flex-1 flex-col items-center gap-14 py-12 sm:py-16 lg:flex-row lg:gap-16 lg:py-10">
+        {/* Copy */}
+        <div className="flex flex-1 flex-col items-center text-center lg:items-start lg:text-left">
+          <motion.span
+            {...fadeUp(0)}
+            className="mb-6 inline-flex items-center gap-2 rounded-full border border-blue-500/25 bg-blue-500/10 px-3 py-1 text-xs font-medium text-blue-300"
           >
-            Track Your Personal
-          </GradientText>
-          <TrueFocus
-            sentence="Stocks Portfolio CryptoAssets Markets"
-            borderColor="#3b82f6"
-            glowColor="rgba(59, 130, 246, 0.4)"
-            animationDuration={0.5}
-            pauseBetweenAnimations={1.5}
-            textClassName="bg-gradient-to-br from-blue-100 via-blue-400 to-blue-600 bg-clip-text text-transparent"
-          />
-        </h1>
+            <span className="size-1.5 rounded-full bg-blue-400" />
+            Portfolio intelligence engine
+          </motion.span>
 
-        <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-4 sm:gap-x-8 text-sm">
-          <div className="flex flex-col items-center gap-1">
-            <span className="text-gray-100 font-bold text-xl sm:text-2xl">
-              <CountUp target={500} />
-            </span>
-            <span className="text-gray-400">Stocks Tracked</span>
-          </div>
-          <div className="w-px h-10 bg-white/10" />
-          <div className="flex flex-col items-center gap-1">
-            <span className="text-gray-100 font-bold text-xl sm:text-2xl">
-              <CountUp target={150} />
-            </span>
-            <span className="text-gray-400">Markets Covered</span>
-          </div>
-          <div className="w-px h-10 bg-white/10" />
-          <div className="flex flex-col items-center gap-1">
-            <span className="text-gray-100 font-bold text-xl sm:text-2xl">
-              <CountUp target={1000000} />
-            </span>
-            <span className="text-gray-400">Data Points Daily</span>
-          </div>
-          <div className="w-px h-10 bg-white/10" />
-          <div className="flex flex-col items-center gap-1">
-            <span className="text-gray-100 font-bold text-xl sm:text-2xl">
-              <CountUp target={200} />
-            </span>
-            <span className="text-gray-400">Crypto Assets</span>
-          </div>
+          <motion.h1
+            {...fadeUp(0.08)}
+            className="max-w-2xl text-4xl font-bold leading-[1.08] tracking-tight text-white sm:text-5xl lg:text-6xl"
+          >
+            See what{" "}
+            <span className="bg-gradient-to-r from-blue-300 via-blue-400 to-blue-600 bg-clip-text text-transparent">
+              actually happened
+            </span>{" "}
+            to your investments.
+          </motion.h1>
+
+          <motion.p
+            {...fadeUp(0.16)}
+            className="mt-6 max-w-xl text-base leading-relaxed text-gray-500 sm:text-lg"
+          >
+            Stoxly replays your transaction ledger into true time-weighted and
+            money-weighted returns, risk analytics, and plain-English
+            explanations — not just another ticker dashboard.
+          </motion.p>
+
+          <motion.div
+            {...fadeUp(0.24)}
+            className="mt-9 flex w-full flex-col gap-3 sm:w-auto sm:flex-row"
+          >
+            {signedIn ? (
+              <Button asChild size="lg" className="h-11 px-5 text-sm">
+                <Link href="/dashboard">
+                  Open dashboard
+                  <ArrowRight className="size-4" />
+                </Link>
+              </Button>
+            ) : (
+              <>
+                <Button asChild size="lg" className="h-11 px-5 text-sm">
+                  <Link href="/sign-up">
+                    Get started free
+                    <ArrowRight className="size-4" />
+                  </Link>
+                </Button>
+                <TryDemoButton className="h-11 px-5 text-sm" />
+              </>
+            )}
+          </motion.div>
+
+          {!signedIn && (
+            <motion.p
+              {...fadeUp(0.3)}
+              className="mt-4 text-xs text-gray-500"
+            >
+              Free to start · The demo needs no signup
+            </motion.p>
+          )}
         </div>
+
+        {/* Product preview */}
+        <motion.div
+          {...(reduceMotion
+            ? {}
+            : {
+                initial: { opacity: 0, y: 24, scale: 0.98 },
+                animate: { opacity: 1, y: 0, scale: 1 },
+                transition: {
+                  duration: 0.8,
+                  delay: 0.2,
+                  ease: [0.22, 1, 0.36, 1] as const,
+                },
+              })}
+          className="flex w-full flex-1 justify-center lg:justify-end"
+        >
+          <HeroPreview />
+        </motion.div>
       </div>
 
-      <div className="w-full shrink-0 pb-2 sm:pb-2">
-        <LogoLoop
-          logos={companies}
-          speed={80}
-          direction="left"
-          logoHeight={28}
-          gap={48}
-          pauseOnHover
-          fadeOut
-          fadeOutColor="rgba(0,0,0,80)"
-        />
+      <div className="w-full shrink-0 pb-4">
+        <p className="mb-4 text-center text-[11px] font-medium uppercase tracking-[0.2em] text-gray-500">
+          Live across the market
+        </p>
+        <TickerTape signedIn={signedIn} />
       </div>
     </section>
   );

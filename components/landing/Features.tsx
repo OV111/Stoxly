@@ -30,6 +30,10 @@ type MarketStat = {
   markets: number;
 };
 
+// Shared by the header row and data rows so the columns line up. The
+// absolute-change column drops out on phones, where four columns don't fit.
+const MOVER_GRID = "grid grid-cols-[minmax(0,1fr)_5.5rem_4.5rem] sm:grid-cols-[minmax(0,1fr)_5.5rem_5rem_4.5rem] items-center gap-2";
+
 const StockSkeleton = () => (
   <div className="flex flex-col gap-3">
     {Array.from({ length: 8 }).map((_, i) => (
@@ -94,8 +98,11 @@ const Features = () => {
   return (
     <section className="container py-10 sm:py-14">
       <div className="text-center mb-8 sm:mb-10">
-        <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold mb-3 bg-gradient-to-r from-white via-blue-400 to-blue-600 bg-clip-text text-transparent">
-          Today&apos;s Crypto Movers
+        <p className="mb-3 text-xs font-medium uppercase tracking-[0.2em] text-blue-400">
+          Live market
+        </p>
+        <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold tracking-tight text-white mb-3">
+          Today&apos;s crypto movers
         </h2>
         <p className="text-gray-500 text-sm sm:text-base max-w-xl mx-auto">
           Stay ahead with live top gainers, losers, and key crypto market data
@@ -105,8 +112,8 @@ const Features = () => {
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {/* Top Gainers */}
-        <div className="min-h-64 md:h-100 w-full rounded-xl border border-gray-800 p-4">
-          <div className="flex items-center gap-3 mb-4 border-b border-gray-800 pb-3">
+        <div className="min-h-64 w-full rounded-2xl border border-white/10 bg-gray-800/40 p-5">
+          <div className="flex items-center gap-3 mb-3 border-b border-white/5 pb-4">
             <div className="flex items-center justify-center bg-green-500/10 rounded-lg p-2">
               <ChartNoAxesCombined className="text-green-400 size-4" />
             </div>
@@ -122,30 +129,42 @@ const Features = () => {
               No gainers data available.
             </p>
           ) : (
-            <div className="flex flex-col gap-3">
+            <div className="flex flex-col text-sm">
+              <div className={`${MOVER_GRID} pb-2 text-[11px] font-medium uppercase tracking-wider text-gray-500`}>
+                <span>Asset</span>
+                <span className="text-right">Price</span>
+                <span className="hidden text-right sm:block">Change</span>
+                <span className="text-right">%</span>
+              </div>
               {gainers.map((crypto) => (
-                <div className="flex justify-between items-center" key={crypto.symbol}>
-                  <div className="flex items-center gap-2">
+                <div
+                  className={`${MOVER_GRID} rounded-md py-2 -mx-2 px-2 transition-colors hover:bg-white/[0.03]`}
+                  key={crypto.symbol}
+                >
+                  <div className="flex min-w-0 items-center gap-2">
                     {crypto.image && (
                       <Image
                         src={crypto.image}
-                        alt={crypto.name}
+                        alt=""
                         width={20}
                         height={20}
-                        className="w-5 h-5 rounded-full"
+                        className="w-5 h-5 shrink-0 rounded-full"
                       />
                     )}
-                    <span className="text-green-400 font-medium">
+                    <span className="font-medium text-white">
                       {crypto.symbol.toUpperCase()}
                     </span>
+                    <span className="hidden truncate text-gray-500 sm:inline">
+                      {crypto.name}
+                    </span>
                   </div>
-                  <span className="text-gray-400">
+                  <span className="text-right tabular-nums text-gray-400">
                     ${crypto.price.toFixed(2)}
                   </span>
-                  <span className="text-green-400">
+                  <span className="hidden text-right tabular-nums text-green-400 sm:block">
                     +${crypto.change.toFixed(2)}
                   </span>
-                  <span className="text-green-400">
+                  <span className="text-right tabular-nums font-medium text-green-400">
                     +{crypto.changePercent.toFixed(2)}%
                   </span>
                 </div>
@@ -155,8 +174,8 @@ const Features = () => {
         </div>
 
         {/* Top Losers */}
-        <div className="min-h-64 md:h-100 w-full rounded-xl border border-gray-800 p-4">
-          <div className="flex items-center gap-3 mb-4 border-b border-gray-800 pb-3">
+        <div className="min-h-64 w-full rounded-2xl border border-white/10 bg-gray-800/40 p-5">
+          <div className="flex items-center gap-3 mb-3 border-b border-white/5 pb-4">
             <div className="flex items-center justify-center bg-red-500/10 rounded-lg p-2">
               <ArrowDownNarrowWide className="text-red-400 size-4" />
             </div>
@@ -172,30 +191,42 @@ const Features = () => {
               No losers data available.
             </p>
           ) : (
-            <div className="flex flex-col gap-3">
+            <div className="flex flex-col text-sm">
+              <div className={`${MOVER_GRID} pb-2 text-[11px] font-medium uppercase tracking-wider text-gray-500`}>
+                <span>Asset</span>
+                <span className="text-right">Price</span>
+                <span className="hidden text-right sm:block">Change</span>
+                <span className="text-right">%</span>
+              </div>
               {losers.map((crypto) => (
-                <div className="flex justify-between items-center" key={crypto.symbol}>
-                  <div className="flex items-center gap-2">
+                <div
+                  className={`${MOVER_GRID} rounded-md py-2 -mx-2 px-2 transition-colors hover:bg-white/[0.03]`}
+                  key={crypto.symbol}
+                >
+                  <div className="flex min-w-0 items-center gap-2">
                     {crypto.image && (
                       <Image
                         src={crypto.image}
-                        alt={crypto.name}
+                        alt=""
                         width={20}
                         height={20}
-                        className="w-5 h-5 rounded-full"
+                        className="w-5 h-5 shrink-0 rounded-full"
                       />
                     )}
-                    <span className="text-red-400 font-medium">
+                    <span className="font-medium text-white">
                       {crypto.symbol.toUpperCase()}
                     </span>
+                    <span className="hidden truncate text-gray-500 sm:inline">
+                      {crypto.name}
+                    </span>
                   </div>
-                  <span className="text-gray-400">
+                  <span className="text-right tabular-nums text-gray-400">
                     ${crypto.price.toFixed(2)}
                   </span>
-                  <span className="text-red-400">
+                  <span className="hidden text-right tabular-nums text-red-400 sm:block">
                     -${Math.abs(crypto.change).toFixed(2)}
                   </span>
-                  <span className="text-red-400">
+                  <span className="text-right tabular-nums font-medium text-red-400">
                     {crypto.changePercent.toFixed(2)}%
                   </span>
                 </div>
@@ -213,27 +244,27 @@ const Features = () => {
           ))
         ) : marketStats ? (
           <>
-            <div className="flex flex-col gap-1 rounded-xl border border-gray-800 px-4 py-3">
+            <div className="flex flex-col gap-1 rounded-xl border border-white/10 bg-gray-800/40 px-4 py-3">
               <span className="text-gray-400 text-xs font-medium">Total Market Cap</span>
-              <span className="text-white font-bold text-lg">
+              <span className="text-white font-semibold text-lg tabular-nums">
                 ${(marketStats.totalMarketCap / 1e12).toFixed(2)}T
               </span>
             </div>
-            <div className="flex flex-col gap-1 rounded-xl border border-gray-800 px-4 py-3">
+            <div className="flex flex-col gap-1 rounded-xl border border-white/10 bg-gray-800/40 px-4 py-3">
               <span className="text-gray-400 text-xs font-medium">24h Volume</span>
-              <span className="text-white font-bold text-lg">
+              <span className="text-white font-semibold text-lg tabular-nums">
                 ${(marketStats.totalVolume24h / 1e9).toFixed(2)}B
               </span>
             </div>
-            <div className="flex flex-col gap-1 rounded-xl border border-gray-800 px-4 py-3">
+            <div className="flex flex-col gap-1 rounded-xl border border-white/10 bg-gray-800/40 px-4 py-3">
               <span className="text-gray-400 text-xs font-medium">BTC Dominance</span>
-              <span className="text-white font-bold text-lg">
+              <span className="text-white font-semibold text-lg tabular-nums">
                 {marketStats.btcDominance.toFixed(1)}%
               </span>
             </div>
-            <div className="flex flex-col gap-1 rounded-xl border border-gray-800 px-4 py-3">
+            <div className="flex flex-col gap-1 rounded-xl border border-white/10 bg-gray-800/40 px-4 py-3">
               <span className="text-gray-400 text-xs font-medium">Active Coins</span>
-              <span className="text-white font-bold text-lg">
+              <span className="text-white font-semibold text-lg tabular-nums">
                 {marketStats.activeCryptocurrencies.toLocaleString()}
               </span>
             </div>

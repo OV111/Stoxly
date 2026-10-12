@@ -32,7 +32,9 @@ const LandingNav = ({ user }: { user: CurrentUser | null }) => {
   }, [user]);
 
   return (
-    <nav className="top-0 left-0 right-0 z-50 w-full h-16 flex items-center justify-between px-4 sm:px-6 bg-transparent">
+    <nav className="relative top-0 left-0 right-0 z-50 w-full h-16 flex items-center justify-between px-4 sm:px-6 bg-transparent">
+      {/* `relative` above is load-bearing: z-50 only applies to positioned
+          elements, and the mobile menu must stack above the hero cards. */}
       <Link
         href="/"
         className="flex cursor-pointer items-center gap-2"

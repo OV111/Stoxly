@@ -51,9 +51,12 @@ const Summary = () => {
       className="container py-14 sm:py-20"
     >
       <div className="text-center mb-10 sm:mb-12">
+        <p className="mb-3 text-xs font-medium uppercase tracking-[0.2em] text-blue-400">
+          The toolkit
+        </p>
         <h2
           id="summary-heading"
-          className="text-2xl sm:text-3xl md:text-4xl font-bold mb-3 bg-gradient-to-r from-white via-blue-400 to-blue-600 bg-clip-text text-transparent"
+          className="text-2xl sm:text-3xl md:text-4xl font-bold tracking-tight text-white mb-3"
         >
           Everything you need to track the market
         </h2>
@@ -71,7 +74,7 @@ const Summary = () => {
             /* Border-brightening on hover is the app's established interactive
                language (NewsCard, DecisionTimeline, NewsPanel) — no lift or
                shadow is used anywhere else, so none is introduced here. */
-            className="flex flex-col gap-4 rounded-xl border border-gray-800 p-6 transition-colors hover:border-gray-700 hover:bg-gray-900/40"
+            className="flex flex-col gap-4 rounded-2xl border border-white/10 bg-gray-800/40 p-6 transition-colors hover:border-white/20 hover:bg-gray-800/70"
           >
             <div
               aria-hidden="true"
